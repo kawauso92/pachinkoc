@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>AppC | 機種情報</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#080c10;
+  --surface:#0d1117;
+  --surface2:#141b24;
+  --surface3:#1c2530;
+  --border:#1e2d3d;
+  --accent:#00d4ff;
+  --green:#39ff6e;
+  --warn:#ffcc00;
+  --red:#ff4466;
+  --text:#e2e8f0;
+  --text2:#8899aa;
+  --text3:#607080;
+  --radius:12px;
+  --radius-sm:8px;
+}
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html { color-scheme:dark; }
+body {
+  background:var(--bg);
+  color:var(--text);
+  font-family:"Noto Sans JP",sans-serif;
+  min-height:100vh;
+  max-width:430px;
+  margin:0 auto;
+  overflow-x:hidden;
+}
+body::before {
+  content:"";
+  position:fixed;
+  inset:0;
+  background-image:
+    linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+  background-size:40px 40px;
+  pointer-events:none;
+  z-index:0;
+}
+.app { position:relative; z-index:1; padding-bottom:92px; }
+.header {
+  position:sticky;
+  top:0;
+  z-index:120;
+  padding:14px 16px 12px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  border-bottom:1px solid var(--border);
+  background:rgba(8,12,16,0.95);
+  backdrop-filter:blur(10px);
+}
+.app-title {
+  font-family:"Rajdhani",sans-serif;
+  font-size:20px;
+  font-weight:700;
+  letter-spacing:3px;
+  color:var(--accent);
+}
+.app-subtitle {
+  margin-top:2px;
+  font-size:11px;
+  color:var(--text2);
+  font-family:"JetBrains Mono",monospace;
+}
+.status-dot {
+  width:7px;
+  height:7px;
+  display:inline-block;
+  margin-right:5px;
+  border-radius:50%;
+  background:var(--green);
+  box-shadow:0 0 8px var(--green);
+  animation:pulse 2s infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+.top-chip {
+  border:1px solid rgba(0,212,255,0.24);
+  border-radius:999px;
+  background:rgba(0,212,255,0.08);
+  color:var(--accent);
+  padding:6px 10px;
+  font-size:10px;
+  font-family:"JetBrains Mono",monospace;
+  letter-spacing:1px;
+}
+.selector-bar {
+  position:sticky;
+  top:63px;
+  z-index:110;
+  padding:12px 14px 10px;
+  border-bottom:1px solid rgba(30,45,61,0.9);
+  background:rgba(8,12,16,0.96);
+  backdrop-filter:blur(14px);
+}
+.selector-wrap {
+  background:linear-gradient(135deg, rgba(0,212,255,0.08), rgba(28,37,48,0.7));
+  border:1px solid rgba(0,212,255,0.14);
+  border-radius:var(--radius);
+  padding:12px;
+}
+.selector-label-row {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:8px;
+}
+.selector-label {
+  font-size:10px;
+  color:var(--text2);
+  font-family:"JetBrains Mono",monospace;
+  letter-spacing:1px;
+  text-transform:uppercase;
+}
+.selector-caption { font-size:10px; color:var(--text3); }
+.input-field {
+  width:100%;
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  background:var(--surface3);
+  color:var(--text);
+  padding:11px 12px;
+  font-size:15px;
+  font-family:"Noto Sans JP",sans-serif;
+  outline:none;
+  transition:border-color 0.2s, box-shadow 0.2s;
+}
+.input-field:focus {
+  border-color:var(--accent);
+  box-shadow:0 0 0 2px rgba(0,212,255,0.14);
+}
+select.input-field {
+  cursor:pointer;
+  appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238899aa' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:right 12px center;
+  padding-right:34px;
+}
+.tab-content { display:none; padding:14px 14px 0; }
+.tab-content.active { display:block; }
+.section {
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:14px;
+  margin-bottom:10px;
+}
+.section-header { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+.section-label {
+  font-family:"Rajdhani",sans-serif;
+  font-size:12px;
+  font-weight:600;
+  letter-spacing:2px;
+  color:var(--text2);
+  text-transform:uppercase;
+  white-space:nowrap;
+}
+.section-line { flex:1; height:1px; background:var(--border); }
+.hero-card {
+  background:linear-gradient(135deg, rgba(0,212,255,0.09), rgba(13,17,23,0.92));
+  border:1px solid rgba(0,212,255,0.2);
+}
+.hero-title { font-size:22px; line-height:1.45; font-weight:700; }
+.hero-sub { margin-top:8px; color:var(--text2); font-size:12px; }
+.stats-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-top:14px; }
+.stat-card {
+  background:rgba(20,27,36,0.9);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  padding:10px 8px;
+  text-align:center;
+}
+.stat-value {
+  font-family:"JetBrains Mono",monospace;
+  font-size:18px;
+  font-weight:700;
+  color:var(--accent);
+}
+.stat-label {
+  margin-top:4px;
+  color:var(--text2);
+  font-size:9px;
+  letter-spacing:1px;
+  text-transform:uppercase;
+  font-family:"JetBrains Mono",monospace;
+}
+.subtabs { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
+.subtab-btn {
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  background:var(--surface2);
+  color:var(--text2);
+  padding:12px 10px;
+  font-family:"Rajdhani",sans-serif;
+  font-size:14px;
+  letter-spacing:2px;
+  font-weight:700;
+  cursor:pointer;
+  transition:all 0.2s;
+}
+.subtab-btn.active {
+  background:linear-gradient(135deg, rgba(0,212,255,0.16), rgba(0,212,255,0.05));
+  border-color:rgba(0,212,255,0.34);
+  color:var(--accent);
+  box-shadow:0 0 18px rgba(0,212,255,0.08);
+}
+.subtab-panel { display:none; }
+.subtab-panel.active { display:block; }
+.bullet-list, .number-list { list-style:none; display:grid; gap:10px; }
+.bullet-item, .number-item {
+  position:relative;
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  padding:11px 12px;
+  line-height:1.7;
+  color:var(--text);
+}
+.bullet-item { padding-left:30px; }
+.bullet-item::before {
+  content:"•";
+  position:absolute;
+  left:12px;
+  top:10px;
+  color:var(--accent);
+  font-size:18px;
+  line-height:1;
+}
+.number-item { padding-left:38px; }
+.number-badge {
+  position:absolute;
+  left:11px;
+  top:10px;
+  color:var(--accent);
+  font-family:"JetBrains Mono",monospace;
+  font-size:13px;
+  font-weight:700;
+}
+.empty-note {
+  color:var(--text2);
+  background:rgba(136,153,170,0.06);
+  border:1px dashed rgba(136,153,170,0.24);
+  border-radius:var(--radius-sm);
+  padding:12px;
+  line-height:1.7;
+}
+.placeholder-section { min-height:260px; display:grid; place-items:center; }
+.placeholder-card {
+  width:100%;
+  background:linear-gradient(135deg, rgba(20,27,36,0.95), rgba(13,17,23,0.95));
+  border:1px dashed rgba(0,212,255,0.25);
+  border-radius:var(--radius);
+  padding:28px 18px;
+  text-align:center;
+}
+.placeholder-icon { font-size:32px; margin-bottom:12px; }
+.placeholder-title {
+  font-family:"Rajdhani",sans-serif;
+  font-size:18px;
+  letter-spacing:2px;
+  color:var(--accent);
+}
+.placeholder-text { margin-top:10px; color:var(--text2); font-size:13px; line-height:1.8; }
+.bottom-nav {
+  position:fixed;
+  left:50%;
+  bottom:0;
+  transform:translateX(-50%);
+  width:100%;
+  max-width:430px;
+  display:flex;
+  background:rgba(13,17,23,0.97);
+  backdrop-filter:blur(20px);
+  border-top:1px solid var(--border);
+  z-index:200;
+}
+.nav-item {
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  padding:9px 4px 11px;
+  cursor:pointer;
+  position:relative;
+  background:none;
+  border:none;
+}
+.nav-item.active::before {
+  content:"";
+  position:absolute;
+  top:0;
+  left:20%;
+  right:20%;
+  height:2px;
+  background:var(--accent);
+  border-radius:0 0 4px 4px;
+  box-shadow:0 0 8px var(--accent);
+}
+.nav-icon { font-size:19px; margin-bottom:2px; }
+.nav-label {
+  font-size:9px;
+  letter-spacing:1px;
+  color:var(--text3);
+  text-transform:uppercase;
+  font-family:"Rajdhani",sans-serif;
+  font-weight:600;
+}
+.nav-item.active .nav-label { color:var(--accent); }
+@media (max-width:360px) {
+  .stats-grid { grid-template-columns:repeat(2, 1fr); }
+  .hero-title { font-size:19px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="header">
+    <div>
+      <div class="app-title">AppC</div>
+      <div class="app-subtitle"><span class="status-dot"></span>Slot Machine Info Navigator</div>
+    </div>
+    <div class="top-chip">MACHINE DB</div>
+  </header>
+
+  <div class="selector-bar">
+    <div class="selector-wrap">
+      <div class="selector-label-row">
+        <div class="selector-label">機種選択</div>
+        <div class="selector-caption">固定表示</div>
+      </div>
+      <select id="machineSelect" class="input-field" aria-label="機種選択"></select>
+    </div>
+  </div>
+
+  <main>
+    <section id="tab-kado" class="tab-content">
+      <div class="section placeholder-section">
+        <div class="placeholder-card">
+          <div class="placeholder-icon">🎰</div>
+          <div class="placeholder-title">稼働入力</div>
+          <div class="placeholder-text">準備中</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-analysis" class="tab-content">
+      <div class="section placeholder-section">
+        <div class="placeholder-card">
+          <div class="placeholder-icon">📊</div>
+          <div class="placeholder-title">分析</div>
+          <div class="placeholder-text">準備中</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-machine" class="tab-content active">
+      <div class="section hero-card">
+        <div class="section-header">
+          <div class="section-label">Machine Overview</div>
+          <div class="section-line"></div>
+        </div>
+        <div id="machineName" class="hero-title"></div>
+        <div class="hero-sub">機種情報とねらい目を、同じ画面内で素早く切り替えて確認できます。</div>
+        <div class="stats-grid">
+          <div class="stat-card"><div id="tenjoCount" class="stat-value">0</div><div class="stat-label">TENJO</div></div>
+          <div class="stat-card"><div id="tokuseiCount" class="stat-value">0</div><div class="stat-label">TOKUSEI</div></div>
+          <div class="stat-card"><div id="resetCount" class="stat-value">0</div><div class="stat-label">RESET</div></div>
+          <div class="stat-card"><div id="zoneCount" class="stat-value">0</div><div class="stat-label">ZONE</div></div>
+        </div>
+      </div>
+
+      <div class="subtabs" role="tablist" aria-label="機種情報サブタブ">
+        <button type="button" class="subtab-btn active" data-subtab="machine-info" aria-selected="true">機種情報</button>
+        <button type="button" class="subtab-btn" data-subtab="targets" aria-selected="false">ねらい目</button>
+      </div>
+
+      <div id="subtab-machine-info" class="subtab-panel active">
+        <section id="tenjoSection" class="section">
+          <div class="section-header"><div class="section-label">天井</div><div class="section-line"></div></div>
+          <ul id="tenjoList" class="bullet-list"></ul>
+        </section>
+
+        <section id="tokuseiSection" class="section">
+          <div class="section-header"><div class="section-label">機種特性</div><div class="section-line"></div></div>
+          <ol id="tokuseiList" class="number-list"></ol>
+        </section>
+      </div>
+
+      <div id="subtab-targets" class="subtab-panel">
+        <section class="section">
+          <div class="section-header"><div class="section-label">リセット</div><div class="section-line"></div></div>
+          <div id="resetContent"></div>
+        </section>
+
+        <section class="section">
+          <div class="section-header"><div class="section-label">ゾーン</div><div class="section-line"></div></div>
+          <div id="zoneContent"></div>
+        </section>
+      </div>
+    </section>
+
+    <section id="tab-log" class="tab-content">
+      <div class="section placeholder-section">
+        <div class="placeholder-card">
+          <div class="placeholder-icon">📖</div>
+          <div class="placeholder-title">機種情報</div>
+          <div class="placeholder-text">このタブのみ実装済みです。下部メニューから表示できます。</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-settings" class="tab-content">
+      <div class="section placeholder-section">
+        <div class="placeholder-card">
+          <div class="placeholder-icon">⚙️</div>
+          <div class="placeholder-title">設定</div>
+          <div class="placeholder-text">準備中</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="bottom-nav" aria-label="メインタブ">
+    <button type="button" class="nav-item" data-tab="kado"><div class="nav-icon">🎰</div><div class="nav-label">稼働入力</div></button>
+    <button type="button" class="nav-item" data-tab="analysis"><div class="nav-icon">📊</div><div class="nav-label">分析</div></button>
+    <button type="button" class="nav-item active" data-tab="machine"><div class="nav-icon">📖</div><div class="nav-label">機種情報</div></button>
+    <button type="button" class="nav-item" data-tab="log"><div class="nav-icon">📝</div><div class="nav-label">メモ</div></button>
+    <button type="button" class="nav-item" data-tab="settings"><div class="nav-icon">⚙️</div><div class="nav-label">設定</div></button>
+  </nav>
+</div>
+
+<script>
+const KISHU_DATA = [
+  {
+    name: 'スマスロ銀河英雄伝説',
+    tenjo: ['ST天井：1000G＋α','設定変更後：800G＋α','GSC天井：2000G＋α','CZ間天井：500pt'],
+    tokusei: ['銀河ポイント解放恩恵は期待枚数1250枚over'],
+    reset: [],
+    zone: ['設定変更後 160G～','それ以外 580G～','英雄ポイント 360pt～','GSC間 1050G～','100のゾーン 80G～','300のゾーン 280G～','上位ST後 100G＋αまで','終了画面「ヤン＆ラインハルト」は100G＋αまで','銀河ポイント示唆（大・特大）はフォロー'],
+  },
+  {
+    name: 'スマスロ化物語',
+    tenjo: ['AT間天井：1000G＋α','設定変更後：600G＋α'],
+    tokusei: [],
+    reset: ['設定変更後 230G～'],
+    zone: ['それ以外 670G～','前回ATの出玉 900枚～なら50Gまで確認','前回ATの出玉 1300枚～なら50Gまで確認','前回ATの出玉 1800枚～なら50Gまで確認','50G以降は当日差枚＋500枚以上なら100Gまでフォロー','当日差枚＋1400枚～は切断狙い'],
+  },
+  {
+    name: 'スマスロプリズムナナ',
+    tenjo: ['ST間天井：899G＋α','設定変更後・駆け抜け後：555G＋α','周期天井：7周期','設定変更後・駆け抜け後：5周期'],
+    tokusei: ['上位ST後 20G～ は機械割104.7%','上位ST後狙いで機械割130%overの台もあり'],
+    reset: ['設定変更後・駆け抜け後 190G～','それ以外 500G～','設定変更後・駆け抜け後 3周期～','それ以外 5周期～'],
+    zone: ['200pt 180pt～','400pt 380pt～','600pt 500pt～','マジカル目 9・19・29・39回～','マジカル目 45回～','アイキャッチ「マコ（変身後）」「イタル」はSTまで','ST終了時キャラ「3人」はSTまで','キャラ紹介「ライトニングナナ」はSTまで','プリプリゾーン終了時ボイス「わたしね、君の事好きだよ」「わたしをずっと守ってくれますか」「大好きだって言ってるんです」はSTまで','プリプリゾーン終了時ボイス「気合入れていくよ！」は2周期以降なら初当たりまで','セリフ「期待〜」は2周期以内','セリフ「完璧〜」は当該周期濃厚','上位ST後 20G～'],
+  },
+  {
+    name: 'スマスロ甲鉄城のカバネリ 海門決戦',
+    tenjo: ['ST間天井：996G','設定変更後・駆け抜け後・上位ST後：596G','周期天井：6周期','設定変更後・駆け抜け後・上位ST後：4周期'],
+    tokusei: ['次回上位ST狙いは90%以上で上位ST突入','銅藍CZ 成功期待度78%','生駒CZまで30pt以内＋無名CZまで30pt以内なら機械割105%は切らない想定'],
+    reset: ['リセット後 100G～'],
+    zone: ['下位ST後 580G～','上位ST後 110G～','駆け抜け後 130G～','非短縮時 5周期～','短縮時 3周期～','2周期 260G～','2周期、皮膜レベル3は周期到達まで','2周期以外、皮膜レベル4は周期到達まで','輪廻くじ「輪廻の果報があらんことを」「六根清浄」はボーナスまで','サブ液晶「海門城」はSTまで','無名③は当該周期フォロー','黒煙ポイント蓄積大が出たら次のSTまで','非前兆中に青扇子＋ハズレは解放まで','景之セリフ赤は解放まで','景之白セリフの返し＋ベルは解放まで','深雪セリフ＋ベルは解放まで','非前兆中の会話演出＋ベル揃いは解放まで','青SU＋チャンス目以外は解放まで','ボーナス・ST・CZ後の無名や生駒、カバネランプ点灯台はフォロー','赤セリフはフォロー','緑セリフはフォロー','ミニキャラ演出「近いよ」はフォロー','液晶下部発光の「近」は当該周期フォロー','前回上位STの6G以上信号を起点に1200枚以上獲得して終了した台は次回上位ST狙い'],
+  },
+  {
+    name: 'スマスロアクダマドライブ',
+    tenjo: ['ボーナス間天井：967G＋α','上位AT後・前回745G以上ハマり後：589G＋α','STスルー回数天井：6回'],
+    tokusei: [],
+    reset: ['設定変更後 30G～','設定変更後 2スルーから'],
+    zone: ['下位AT後 530G～','前回745G以上ハマり後・上位AT後 380G～','それ以外 3スルー100G～','111G 80G～','333G 280G～','終了画面「絶対隔離領域」はATまで','シンテツドウポイント 残り3pt以下をフォロー','CZ終了時ボイス「処刑執行だ！」はCZまで','HOLDハンコ赤をフォロー','上乗せハンコ赤をフォロー','超S級ハンコはATまで'],
+  },
+  {
+    name: 'スマスロヨルムンガンド',
+    tenjo: ['AT間天井：999G＋α','設定変更後・恥の世紀終了後：450G＋α'],
+    tokusei: [],
+    reset: ['設定変更後 200G～'],
+    zone: ['下位AT後 680G～','上位AT後 210G～','ココポイント 950pt～','仮天井狙い 410G～','80G～','280G～','480G～','ストーリーアイコンはATまで','通常時カード「アール＆ココ（赤）」をフォロー','通常時カード「バルメ＆ココ（紫）」をフォロー','通常時カード「STORY（紫）」をフォロー','バルメのセリフ「生きていたらまた会いましょう」をフォロー'],
+  },
+  {
+    name: 'スマスロ真打吉宗',
+    tenjo: ['CZ間天井：1000G＋α、6周期','6周期到達時は次回天井4周期に短縮','AT間天井：1500G＋α','設定変更後：1000G＋α','真BIG後：700G＋α'],
+    tokusei: [],
+    reset: ['設定変更後 240G～'],
+    zone: ['CZ間 420G～','5周期200pt～','下位AT後 870G～','真BIG後 55G～','周期カウンター赤色はフォロー','周期カウンター青色は250pt～','御白洲ビジョン4人・5人はCZまで','小吉出現時は3周期以降ならフォロー','中吉をフォロー','大吉をフォロー','奉行所ステージ「極悪人の気配！（赤）」はCZまで','千両箱 赤・虹はATまで','メニュー画面に女性4人出現時（背景赤）はCZまで','緑背景は4周期以内目安'],
+  },
+  {
+    name: 'スマスロ虚構推理',
+    tenjo: ['虚構真偽間天井：1000G＋α','設定変更後：300G or 700Gに短縮'],
+    tokusei: ['特殊狙いは機械割120%over'],
+    reset: ['設定変更後 240G～'],
+    zone: ['それ以外 490G～','300G・400G・500Gの35G手前～','赤背景は100の倍数ゲームまで','エピソード1は残り20G目安','エピソード2は残り30G目安','エピソード3は残り40G目安','エピソード4は残り60G目安','エピソード5は不問','メニュー画面でCZ間G数が0・1Gの台は引き戻し前兆をフォロー'],
+  },
+  {
+    name: 'ガンダムユニコーン覚醒',
+    tenjo: [],
+    tokusei: [],
+    reset: ['ガックン確認','20Gでのステチェンを3回確認するまでフォロー、又は出撃モード移行→失敗でヤメ','30G経過してのステチェン確認時は、出撃モード失敗までフォロー'],
+    zone: ['AT当選後、引き戻し以上濃厚時はATまで','可能性の獣を7揃いカットインなしで単発だった場合は、次回天国モード濃厚のためフォロー'],
+  },
+  {
+    name: 'マジカルハロウィン8',
+    tenjo: [],
+    tokusei: [],
+    reset: ['ガックン確認','0Gから打ち、最初のリプレイ成立から30G経過後のリプレイ成立までフォローし、ART非当選でヤメ'],
+    zone: [],
+  },
+  {
+    name: '沖ドキ！ブラック／ゴールド／ゴージャス',
+    tenjo: [],
+    tokusei: [],
+    reset: ['33Gまでフォロー','ボーナス当選時は天国否定までフォロー'],
+    zone: [],
+  },
+  {
+    name: 'ゾンビランドサガ',
+    tenjo: [],
+    tokusei: [],
+    reset: ['数G回す','順押しリプレイ2回、または右下がりSAGAテンパイハズレ2回発生でヤメ','CZ、ST当選後は上記出目確認後にヤメ'],
+    zone: [],
+  },
+  {
+    name: 'スマスロ北斗の拳 転生の章2',
+    tenjo: ['AT間天井：1536あべし','設定変更後：1280あべし＋あべし加算抽選'],
+    tokusei: ['伝承ミドル以上を狙う立ち回りは機械割114.89%','伝承ロングは機械割126.6%','伝承ショートでも機械割100%を切らない','設定変更後のシャッター狙いは機械割107.7%'],
+    reset: ['設定変更後 350あべし～','リセット時は0G～46あべしまでシャッター演出確認'],
+    zone: ['下位AT後 650あべし～','128ゾーン 105あべし～','256ゾーン 190あべし～','サブ液晶ランプ金点灯はATまで','天破の刻 赤帯確認から256あべし以内をフォロー','白点滅・紫点滅した台は伝承抜けるまで','差枚数＋1300枚以上の台を256あべしまで','即ヤメ台でデータ機G数とあべし数にズレがある台はフォロー','カサンドラステージ滞在中はフォロー','256あべし手前で辞められてる台は256あべしまで','576ゾーン抜けすぐで580～650あべしくらいのカサンドラステージ滞在台はフォロー','321～384あべし時に前兆発生時は345～384あべしまでフォロー','510～576あべしまでフォロー','AT後は20あべし～46あべしまでシャッター演出確認','天破などで46あべしをスキップして129あべし以上ハマった場合は176あべしまで確認','176あべしもスキップした場合は257～301あべしまで確認','そこもスキップした場合は431あべしまで確認','天破ループで576あべし抜け後620あべし前後・684あべし前後でシャッター発生時は896あべしまでフォロー','天撃失敗後の台を0G～'],
+  },
+  {
+    name: 'パチスロ炎炎ノ消防隊（初代）',
+    tenjo: [],
+    tokusei: [],
+    reset: ['ガックンチェック','88のゾーンまでフォロー','88のゾーンで前兆非発生時は250ゾーンまでフォロー','88のゾーンの前兆が変換などで確認できなかった場合は150ゾーンを確認し前兆発生時は250ゾーンまでフォロー'],
+    zone: [],
+  },
+  {
+    name: '頭文字D 2nd',
+    tenjo: [],
+    tokusei: [],
+    reset: ['0～20Gまで高確をフォロー'],
+    zone: [],
+  },
+  {
+    name: '東京喰種',
+    tenjo: [],
+    tokusei: ['リセット機械割105.1%','設定1のリセット台の時給 2601円','設定2のリセット台の時給 3366円','設定3のリセット台の時給 4131円'],
+    reset: ['ガックン確認','0G～CZまでフォロー','50・100・150のゾーンでCZ当選時CZが「大喰いのリゼ」チャンスモード以上の示唆が出た際は1スルー100のゾーンまでフォロー'],
+    zone: [],
+  },
+  {
+    name: 'スマスロモンキーターンⅤ',
+    tenjo: [],
+    tokusei: ['リセット機械割105.5%'],
+    reset: ['ガックン確認','1周期フォロー','200G以上実G数が進んだ場合又は3周期まで進んだ場合は初当たりまでフォロー','200G以下はヤメ（例外条件多数あり）','AT当選後1G目レア役（モードB以上）は続行','ロゴ＋キラキラ、ロゴ＋Vはフォロー','青島・波多野・洞口ライバルモード滞在はフォロー','差枚数＋650枚以上はフォロー'],
+    zone: [],
+  },
+  {
+    name: '防空少女ラブキューレ2〜極限の共鳴〜',
+    tenjo: [],
+    tokusei: [],
+    reset: ['朝イチ0G～初当たりまでフォロー'],
+    zone: [],
+  },
+  {
+    name: '麻雀格闘倶楽部 覚醒',
+    tenjo: ['リセ天井：160G＋α'],
+    tokusei: [],
+    reset: ['リセ天井160G＋αまでフォロー'],
+    zone: [],
+  },
+  {
+    name: '絶対衝激Ⅳ',
+    tenjo: [],
+    tokusei: [],
+    reset: ['朝イチ火曜日後半以降からスタートした場合又は休日が3日以上だった場合1周期をフォロー'],
+    zone: [],
+  },
+  {
+    name: 'ゴジラ',
+    tenjo: [],
+    tokusei: [],
+    reset: ['朝イチ0GからATまでフォロー'],
+    zone: [],
+  },
+  {
+    name: 'スマスロキングパルサー',
+    tenjo: [],
+    tokusei: [],
+    reset: ['ガックンチェック','128Gまでフォローしボーナス当選時は再度128Gまでフォロー','128Gまで回しボーナス非当選時は泡占いで押し引き','泡占い3時確認時はボーナスまで','泡占い2時確認時はボーナスまで','泡占い1時確認時はボーナスまで','ケロット柄メダルはボーナスまで'],
+    zone: [],
+  },
+  {
+    name: 'ダンベル何キロ持てる？',
+    tenjo: [],
+    tokusei: [],
+    reset: ['0G～ATまで'],
+    zone: [],
+  },
+  {
+    name: 'スマスロ秘宝伝',
+    tenjo: ['BIG後天井：799G＋α','REG後天井：649G＋α','設定変更後：499G＋α'],
+    tokusei: [],
+    reset: [],
+    zone: ['BIG後 590G～','REG後 430G～','設定変更後 320G～','オタカラ導の煽り失敗時ボイス「シャロン：反応が近づいてるわ」をフォロー','オタカラ導の煽り失敗時ボイス「クレア：ファ〜イト！」をフォロー','BB終了画面「VR秘宝伝」はフォロー','BB終了画面「クルーズゴッコ」はフォロー','BB終了画面「ダンディ・ジョーンズ」はフォロー','REG中ポーカーのフラッシュ文字色赤はフォロー','ピラミッド占い「すぐそばにある。」はフォロー'],
+  },
+  {
+    name: 'スマスロ無職転生',
+    tenjo: ['ボーナス間天井：ステチェン19回','設定変更後・駆け抜け後・魔術ボーナス失敗後：13回','AT間天井：ステチェン40回','設定変更後：17回'],
+    tokusei: ['無職転生の強AT狙い 機械割123.6%'],
+    reset: ['設定変更後 7周期～','それ以外 24周期～'],
+    zone: ['短縮後 8周期～','非短縮 11周期～','ヒトガミの空間は2周期残り50G～','ターニングポイントは7周期残り50G～','メニュー画面の紫セリフはフォロー'],
+  },
+  {
+    name: '沖ドキ！DUO アンコール',
+    tenjo: ['ボーナス間天井：800G＋α','スルー天井：10スルー'],
+    tokusei: ['記事全体の特殊狙い 機械割123.6%','リセ後0スルー 110～160Gまでのフォローで機械割105%','800G天井到達から天国移行して有利切断せず天国を抜けた後の0スルーは機械割109.6%'],
+    reset: ['設定変更後 2スルーから','リセット後0スルー 110～160Gまでフォロー','設定変更後0スルーで160G以下当選時は1スルー0G～'],
+    zone: ['天国後 4スルーから','仮天井は380Gまでフォロー','700G以上の履歴ありはボーダー-130G','終了画面「あたいがふー以上」は天国までフォロー','リプレイ特殊フラッシュ②はボーナスまで','ベル特殊フラッシュ発生時はボーナスまでフォロー','800G天井到達から天国移行して有利切断せず天国を抜けた後の0スルーはフォロー'],
+  },
+  {
+    name: 'スマスロ鉄拳6',
+    tenjo: ['ボーナス間：900pt＋α','設定変更後：500pt＋α','スルー天井：3回','設定変更後・デビルロード終了後・デビルラッシュ終了後は2回に短縮'],
+    tokusei: ['100ゾーンの天国移行率 25%'],
+    reset: ['設定変更後0スルー 180pt～','設定変更後1スルー 200pt～','設定変更後2スルー 0pt～'],
+    zone: ['下位AT後0スルー 640pt～','下位AT後1スルー 620pt～','下位AT後2スルー 220pt～','上位AT後0スルー 620pt～','上位AT後1スルー 200pt～','上位AT後2スルー 0pt～','100ゾーン 90pt～','300ゾーン 280pt～','平八ステージ滞在中の台をCZまで','木人タッチ「拳王・鉄拳王」はフォロー','終了画面「一美以上」をボーナスまでフォロー','アイキャッチ「平八＋ロゴ以上」をフォロー','差枚数＋1850枚以上の台を天国ゾーン抜けるまで'],
+  },
+  {
+    name: 'パチンコ超甘LT華牌 RR',
+    tenjo: ['遊タイム：大当り間99回転消化で発動（ST消化含む）'],
+    tokusei: [],
+    reset: [],
+    zone: ['11回/1kなら65回転～','12回/1kなら62回転～','13回/1kなら59回転～','14回/1kなら56回転～','15回/1kなら53回転～','16回/1kなら50回転～','17回/1kなら47回転～','18回/1kなら43回転～','19回/1kなら40回転～','20回/1kなら37回転～','LTによるST抜け台も15回/1kあればそのまま遊タイム発動までフォロー可能'],
+  },
+  {
+    name: 'バーニングエクスプレス',
+    tenjo: ['ボーナス間：999G＋α','設定変更後・有利区間切断後：666G＋α'],
+    tokusei: [],
+    reset: ['設定変更後・切断後 310G～','ゾーンは50G手前～目安'],
+    zone: ['それ以外 610G～','設定変更後・有利区間切断後はゾロ目ゲーム数のゾーンを50G手前～目安でフォロー'],
+  },
+  {
+    name: 'ネオプラネット',
+    tenjo: ['ボーナス間：777G＋α','設定変更後：500G＋α'],
+    tokusei: ['モードE 期待枚数2100枚'],
+    reset: ['設定変更後 175G～'],
+    zone: ['前回天井当選 310G～','前回600G以上で当選 480G～','それ以外 540G～','サブ液晶「てんびん座」は連チャンするまでフォロー','サブ液晶「ペガサス座」はボーナスまでフォロー','サブ液晶「かに座」「おうし座」出現時は111G・333Gの高確を確認','プラネットランプ点滅→ボーナス非当選はモードC濃厚でフォロー','連チャン準備状態示唆のサイドランプ点灯時はRB当選か連チャン移行までフォロー','111Gゾーン 100G～','333Gゾーン 320G～','ボーナス後は一律111Gまでフォロー'],
+  },
+  {
+    name: 'スマスロとある科学の超電磁砲2',
+    tenjo: ['AT間：999G＋α','設定変更時：699G＋α','天井到達後のコイン揃いで発動'],
+    tokusei: ['差枚数＋1400枚以上なら0G～100G不問フォローで機械割105%超'],
+    reset: ['設定変更後 250G～'],
+    zone: ['それ以外 630G～','アイキャッチ「婚后以上」をフォロー','セリフ「あら差し入れ？」は299G＋αまでフォロー','100ゾーン 差枚数＋1400枚以上 0G～','100ゾーン 差枚数＋1000枚以上 40G～','100ゾーン それ以下の差枚数 65G～','300ゾーン 250G～','500ゾーン 400G～','100G・200G両方で花火ステージ移行又は両方で花火ステージ移行なしは天井まで打ち切り','200G花火ステージ移行は天井狙いに切り替え','300G花火ステージ移行なしは天井狙いに切り替え'],
+  },
+  {
+    name: 'パチスロ革命機ヴァルヴレイヴ2',
+    tenjo: ['ボーナス・AT間：1500G＋α','設定変更後：1000G＋α','CZ間：999G＋α','周期天井：6周期','設定変更後：3周期','ボーナススルー天井：3回（次回革命ボーナス濃厚）'],
+    tokusei: ['革命ラッシュ後の引き戻しは機械割118.3%'],
+    reset: ['設定変更後0スルー 2周期50pt～','設定変更後1スルー以降 2周期100pt～','設定変更後 ボーナス・AT間 450G～'],
+    zone: ['それ以外のCZ間は5周期0pt～','それ以外REG＆CZスルー3回以内 1050G～','それ以外REG＆CZスルー3回以上 750G～','決戦ボーナス（REG）3スルーから','革命ラッシュ後のみ引き戻しフォロー','マリエ紫セリフはフォロー','赤背景＋ヴァルヴレイヴはフォロー','赤背景はCZまでフォロー','白背景＋ピノは次周期までフォロー','サブモニター「火人・火遊」はCZまでフォロー','サブモニター「マリエ」は革命ボーナスまでフォロー','電脳ゾーン後ボイス「自分で自分が分からない」はCZまでフォロー','マギウスマーク当該周期はフォロー','マギウスマーク前の周期が残り50pt以内もフォロー','1周期と2周期どちらもマギウスマークがある場合は2周期まで打ち切り'],
+  },
+  {
+    name: 'スマスロ絶対衝激Ⅳ',
+    tenjo: ['ボーナス間：9周期消化','設定変更後・駆け抜け後：5周期','有利区間切断後：2周期'],
+    tokusei: ['リセット狙い機械割102.3%'],
+    reset: ['朝イチ0G～1周期まで狙える可能性あり（機械割102.3%）','2G回さないとスマホ画面が見れない'],
+    zone: ['設定変更後・駆け抜け後 3周期～','切断後 1周期～','それ以外 8周期～','リール枠が紫に帯電した黒高確は必ずフォロー','スマホレベル黄色以上を周期終わりまでフォロー'],
+  },
+  {
+    name: 'からくりサーカス',
+    tenjo: [],
+    tokusei: ['リセット狙い機械割105.5%','示唆によるフォロー込みで機械割106.5%超','リーゼが通常B濃厚なら機械割104.3%','リーゼで通常Cなら機械割108.4%','リーゼで天国なら機械割144.7%'],
+    reset: ['ガックン確認','61Gまで回す','61Gで「ぜひ」が画面枠を覆わない時点でヤメ'],
+    zone: ['天国抜け後「しろがねシルエット」はCZまで不問フォロー','天国抜け後「しろがねアップ」はCZまで不問フォロー','セリフ枠が紫はモードC濃厚でフォロー','BETボイス「次で決めましょう」は強チェリー・チャンス目時にフォロー','液晶左上のからくりレア役残り回数がリプレイ時は残り4・5回から表示されたらATまで','液晶左上のからくりレア役残り回数がリプレイ以外は残り2回から表示されたらATまで','エレオノール（開幕ベル）のバトル時に赤ハズレはフォロー','CZ・AT当選後初期ステージが「鳴海ステージ」ならCZまでフォロー','G数の文字が「ピンク」なら次のからくりエピソードで当選濃厚な為フォロー','前兆中やCZ中に運命ランプ点灯した際は次回天国をフォロー','終了画面「しろがね」スポットライトなしはCZまでフォロー','終了画面「銀の女神」「コロンビーヌ」は天国1回取るまで','終了画面「ピエロ」はCZまでフォロー'],
+  },
+  {
+    name: 'スマスロ新鬼武者3',
+    tenjo: ['AT間：1000G＋α','周期天井：6周期','設定変更後：4周期'],
+    tokusei: [],
+    reset: ['設定変更後 330G～','設定変更後 3周期～'],
+    zone: ['上位AT後・秀吉最終決戦失敗後 0G～','下位AT後 460G～','5周期～','1周期 80pt～','差枚数＋1600枚以上の台を1周期のみフォロー','チャージカード（緑）は当該周期までフォロー','みの吉顔アップ（大）は当該周期までフォロー','アイキャッチ「茜」以上は当該周期までフォロー','カウンターの玉 青色はフォロー','カウンターの玉 赤色はフォロー','みの吉示唆確認狙いは25G～50Gまでフォロー','150G以降は10G手前からみの吉示唆確認'],
+  },
+  {
+    name: '主役は銭形5',
+    tenjo: ['ST間：1250G＋α','設定変更後：850G＋α'],
+    tokusei: [],
+    reset: ['設定変更後 170G～'],
+    zone: ['前回1000G以上ハマり後 580G～','それ以外 760G～','150のゾーン 100G～','350のゾーン 300G～','550のゾーン 520G～','各ゾーンで捜査ポイント300pt以下ならボーダー20G下げて狙う','捜査ポイント150pt以下からフォロー','示唆画面「夜景」をフォロー','示唆画面「銭形」をフォロー','示唆画面「ルパン＆銭形」をフォロー','終了画面「不二子」はフォロー','差枚数＋1600枚～天国まで','ボーナス後アイキャッチ「銭形」は天国までフォロー','ボーナス後アイキャッチ「不二子」は不問フォロー'],
+  },
+];
+
+const STATE = {
+  activeTab: 'machine',
+  activeSubtab: 'machine-info',
+  selectedMachine: '',
+};
+
+const CIRCLED_NUMBERS = [
+  '', '①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩',
+  '⑪', '⑫', '⑬', '⑭', '⑮', '⑯', '⑰', '⑱', '⑲', '⑳',
+  '㉑', '㉒', '㉓', '㉔', '㉕', '㉖', '㉗', '㉘', '㉙', '㉚',
+];
+
+function circledNumber(index) {
+  const number = index + 1;
+  return CIRCLED_NUMBERS[number] || `(${number})`;
+}
+
+function getMachineData() {
+  return KISHU_DATA.find((item) => item.name === STATE.selectedMachine) || KISHU_DATA[0];
+}
+
+function populateMachineSelect() {
+  const select = document.getElementById('machineSelect');
+  select.innerHTML = KISHU_DATA.map((item) => `<option value="${item.name}">${item.name}</option>`).join('');
+  select.value = STATE.selectedMachine;
+}
+
+function createNumberList(items) {
+  return `
+    <ol class="number-list">
+      ${items.map((text, index) => `
+        <li class="number-item">
+          <span class="number-badge">${circledNumber(index)}</span>
+          <span>${text}</span>
+        </li>
+      `).join('')}
+    </ol>
+  `;
+}
+
+function renderMachineCounts(data) {
+  document.getElementById('machineName').textContent = data.name;
+  document.getElementById('tenjoCount').textContent = data.tenjo.length;
+  document.getElementById('tokuseiCount').textContent = data.tokusei.length;
+  document.getElementById('resetCount').textContent = data.reset.length;
+  document.getElementById('zoneCount').textContent = data.zone.length;
+}
+
+function renderMachineInfo(data) {
+  const tenjoSection = document.getElementById('tenjoSection');
+  const tokuseiSection = document.getElementById('tokuseiSection');
+  const tenjoList = document.getElementById('tenjoList');
+  const tokuseiList = document.getElementById('tokuseiList');
+
+  if (data.tenjo.length > 0) {
+    tenjoSection.style.display = '';
+    tenjoList.innerHTML = data.tenjo.map((text) => `<li class="bullet-item">${text}</li>`).join('');
+  } else {
+    tenjoSection.style.display = 'none';
+    tenjoList.innerHTML = '';
+  }
+
+  if (data.tokusei.length > 0) {
+    tokuseiSection.style.display = '';
+    tokuseiList.innerHTML = data.tokusei.map((text, index) => `
+      <li class="number-item">
+        <span class="number-badge">${circledNumber(index)}</span>
+        <span>${text}</span>
+      </li>
+    `).join('');
+  } else {
+    tokuseiSection.style.display = 'none';
+    tokuseiList.innerHTML = '';
+  }
+}
+
+function renderTargets(data) {
+  document.getElementById('resetContent').innerHTML = data.reset.length > 0
+    ? createNumberList(data.reset)
+    : '<div class="empty-note">記載なし</div>';
+
+  document.getElementById('zoneContent').innerHTML = data.zone.length > 0
+    ? createNumberList(data.zone)
+    : '<div class="empty-note">記載なし</div>';
+}
+
+function renderMachineTab() {
+  const data = getMachineData();
+  renderMachineCounts(data);
+  renderMachineInfo(data);
+  renderTargets(data);
+}
+
+function setActiveTab(tabName) {
+  STATE.activeTab = tabName;
+  document.querySelectorAll('.tab-content').forEach((panel) => {
+    panel.classList.toggle('active', panel.id === `tab-${tabName}`);
+  });
+  document.querySelectorAll('.nav-item').forEach((button) => {
+    const isActive = button.dataset.tab === tabName;
+    button.classList.toggle('active', isActive);
+    button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+  });
+  localStorage.setItem('appc-active-tab', tabName);
+}
+
+function setActiveSubtab(subtabName) {
+  STATE.activeSubtab = subtabName;
+  document.querySelectorAll('.subtab-btn').forEach((button) => {
+    const isActive = button.dataset.subtab === subtabName;
+    button.classList.toggle('active', isActive);
+    button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+  });
+  document.querySelectorAll('.subtab-panel').forEach((panel) => {
+    panel.classList.toggle('active', panel.id === `subtab-${subtabName}`);
+  });
+  localStorage.setItem('appc-active-subtab', subtabName);
+}
+
+function restoreState() {
+  const savedMachine = localStorage.getItem('appc-selected-machine');
+  const savedTab = localStorage.getItem('appc-active-tab');
+  const savedSubtab = localStorage.getItem('appc-active-subtab');
+
+  if (savedMachine && KISHU_DATA.some((item) => item.name === savedMachine)) {
+    STATE.selectedMachine = savedMachine;
+  } else {
+    STATE.selectedMachine = KISHU_DATA[0].name;
+  }
+
+  if (savedTab) {
+    STATE.activeTab = savedTab;
+  }
+
+  if (savedSubtab) {
+    STATE.activeSubtab = savedSubtab;
+  }
+}
+
+function bindEvents() {
+  document.getElementById('machineSelect').addEventListener('change', (event) => {
+    STATE.selectedMachine = event.target.value;
+    localStorage.setItem('appc-selected-machine', STATE.selectedMachine);
+    renderMachineTab();
+  });
+
+  document.querySelectorAll('.nav-item').forEach((button) => {
+    button.addEventListener('click', () => setActiveTab(button.dataset.tab));
+  });
+
+  document.querySelectorAll('.subtab-btn').forEach((button) => {
+    button.addEventListener('click', () => setActiveSubtab(button.dataset.subtab));
+  });
+}
+
+function init() {
+  restoreState();
+  populateMachineSelect();
+  renderMachineTab();
+  setActiveTab(STATE.activeTab);
+  setActiveSubtab(STATE.activeSubtab);
+  bindEvents();
+}
+
+init();
+</script>
+</body>
+</html>
