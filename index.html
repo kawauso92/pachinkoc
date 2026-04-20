@@ -330,6 +330,20 @@ select.input-field {
 }
 .form-grid.single { grid-template-columns:1fr; }
 .form-grid.triple { grid-template-columns:repeat(3, minmax(0, 1fr)); }
+.session-grid {
+  grid-template-columns:1fr;
+}
+.session-grid .field-group,
+.session-grid .readonly-card,
+.session-grid .input-field {
+  min-width:0;
+  max-width:100%;
+  width:100%;
+  overflow:hidden;
+}
+.session-grid input[type="time"] {
+  font-size:16px;
+}
 .field-group {
   display:flex;
   flex-direction:column;
@@ -731,7 +745,7 @@ select.input-field {
 
       <section class="section">
         <div class="section-header"><div class="section-label">Session</div><div class="section-line"></div></div>
-        <div class="form-grid">
+        <div class="form-grid session-grid">
           <div class="field-group">
             <label class="field-label" for="sessionDate">日付</label>
             <input id="sessionDate" class="input-field numeric" type="date">
