@@ -317,9 +317,305 @@ select.input-field {
   font-weight:600;
 }
 .nav-item.active .nav-label { color:var(--accent); }
+.selector-bar.hidden { display:none; }
+.page-note {
+  color:var(--text2);
+  font-size:12px;
+  line-height:1.7;
+}
+.form-grid {
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:10px 8px;
+}
+.form-grid.single { grid-template-columns:1fr; }
+.form-grid.triple { grid-template-columns:repeat(3, minmax(0, 1fr)); }
+.field-group {
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.field-group.full { grid-column:1 / -1; }
+.field-label {
+  font-size:10px;
+  color:var(--text2);
+  font-family:"JetBrains Mono",monospace;
+  letter-spacing:1px;
+  text-transform:uppercase;
+}
+.field-note {
+  color:var(--text3);
+  font-size:11px;
+  line-height:1.5;
+}
+.input-field.numeric {
+  font-family:"JetBrains Mono",monospace;
+}
+.readonly-card {
+  min-height:46px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:11px 12px;
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  background:linear-gradient(135deg, rgba(0,212,255,0.06), rgba(20,27,36,0.85));
+}
+.readonly-label {
+  color:var(--text2);
+  font-size:11px;
+}
+.readonly-value {
+  font-family:"JetBrains Mono",monospace;
+  font-size:15px;
+  font-weight:700;
+  color:var(--accent);
+}
+.metric-grid {
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:8px;
+}
+.metric-card {
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  padding:12px;
+}
+.metric-label {
+  font-size:10px;
+  color:var(--text2);
+  font-family:"JetBrains Mono",monospace;
+  letter-spacing:1px;
+  text-transform:uppercase;
+}
+.metric-value {
+  margin-top:6px;
+  font-family:"JetBrains Mono",monospace;
+  font-size:20px;
+  font-weight:700;
+  color:var(--text);
+  word-break:break-word;
+}
+.metric-value.pos { color:var(--green); }
+.metric-value.neg { color:var(--red); }
+.metric-value.neutral { color:var(--accent); }
+.divider {
+  height:1px;
+  margin:14px 0;
+  background:var(--border);
+}
+.inline-split {
+  display:grid;
+  grid-template-columns:1fr auto 1fr;
+  gap:8px;
+  align-items:end;
+}
+.inline-symbol {
+  padding-bottom:11px;
+  color:var(--text2);
+  text-align:center;
+  font-family:"JetBrains Mono",monospace;
+}
+.radio-group {
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.radio-chip {
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:8px 12px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  background:var(--surface2);
+  color:var(--text2);
+  font-size:12px;
+  cursor:pointer;
+}
+.radio-chip input {
+  accent-color:var(--accent);
+}
+.counter-toolbar {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  margin-bottom:12px;
+}
+.toolbar-actions {
+  display:flex;
+  gap:8px;
+}
+.soft-btn,
+.primary-btn,
+.danger-btn {
+  border-radius:var(--radius-sm);
+  padding:10px 12px;
+  font-size:12px;
+  font-family:"Rajdhani",sans-serif;
+  font-weight:700;
+  letter-spacing:1.5px;
+  cursor:pointer;
+}
+.soft-btn {
+  background:var(--surface2);
+  border:1px solid var(--border);
+  color:var(--text2);
+}
+.primary-btn {
+  background:linear-gradient(135deg, rgba(0,212,255,0.18), rgba(0,212,255,0.06));
+  border:1px solid rgba(0,212,255,0.38);
+  color:var(--accent);
+}
+.danger-btn {
+  background:rgba(255,68,102,0.08);
+  border:1px solid rgba(255,68,102,0.28);
+  color:var(--red);
+}
+.counter-list {
+  display:grid;
+  gap:10px;
+}
+.counter-row {
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  padding:10px;
+  display:grid;
+  gap:8px;
+}
+.counter-top {
+  display:grid;
+  grid-template-columns:minmax(72px, auto) 1fr auto auto;
+  gap:8px;
+  align-items:center;
+}
+.counter-name-btn {
+  min-height:40px;
+  padding:0 10px;
+  border-radius:var(--radius-sm);
+  border:1px solid rgba(0,212,255,0.28);
+  background:rgba(0,212,255,0.08);
+  color:var(--accent);
+  font-family:"Rajdhani",sans-serif;
+  font-size:15px;
+  font-weight:700;
+  cursor:pointer;
+}
+.counter-number {
+  width:100%;
+  min-height:40px;
+  text-align:center;
+}
+.counter-step {
+  width:40px;
+  height:40px;
+  border-radius:var(--radius-sm);
+  border:1px solid var(--border);
+  background:var(--surface3);
+  color:var(--text);
+  font-size:22px;
+  line-height:1;
+  cursor:pointer;
+}
+.counter-stat {
+  color:var(--text2);
+  font-size:12px;
+  font-family:"JetBrains Mono",monospace;
+}
+.hits-list {
+  display:grid;
+  gap:8px;
+}
+.hit-row {
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  padding:10px;
+  display:grid;
+  grid-template-columns:84px 1fr 1fr auto;
+  gap:8px;
+  align-items:center;
+}
+.icon-btn {
+  width:38px;
+  height:38px;
+  border-radius:var(--radius-sm);
+  border:1px solid rgba(255,68,102,0.25);
+  background:rgba(255,68,102,0.08);
+  color:var(--red);
+  font-size:18px;
+  cursor:pointer;
+}
+.stack-actions {
+  display:grid;
+  gap:10px;
+}
+.save-banner {
+  display:none;
+  margin-bottom:10px;
+  padding:10px 12px;
+  border:1px solid rgba(57,255,110,0.25);
+  border-radius:var(--radius-sm);
+  background:rgba(57,255,110,0.08);
+  color:var(--green);
+  font-size:12px;
+  font-family:"JetBrains Mono",monospace;
+}
+.save-banner.show { display:block; }
+.shop-list {
+  display:grid;
+  gap:8px;
+}
+.shop-row {
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  padding:12px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.shop-info {
+  min-width:0;
+}
+.shop-name {
+  font-weight:700;
+}
+.shop-meta {
+  margin-top:4px;
+  color:var(--text2);
+  font-size:12px;
+  font-family:"JetBrains Mono",monospace;
+}
+.shop-actions {
+  display:flex;
+  gap:8px;
+  flex-shrink:0;
+}
+.empty-state {
+  color:var(--text2);
+  background:rgba(136,153,170,0.06);
+  border:1px dashed rgba(136,153,170,0.24);
+  border-radius:var(--radius-sm);
+  padding:14px;
+  line-height:1.7;
+}
 @media (max-width:360px) {
   .stats-grid { grid-template-columns:repeat(2, 1fr); }
   .hero-title { font-size:19px; }
+  .hit-row { grid-template-columns:1fr; }
+  .counter-top { grid-template-columns:1fr 1fr auto auto; }
+  .metric-grid,
+  .form-grid,
+  .form-grid.triple { grid-template-columns:1fr; }
+  .inline-split { grid-template-columns:1fr; }
+  .inline-symbol { display:none; }
 }
 </style>
 </head>
@@ -345,12 +641,140 @@ select.input-field {
 
   <main>
     <section id="tab-kado" class="tab-content">
-      <div class="section placeholder-section">
-        <div class="placeholder-card">
-          <div class="placeholder-icon">🎰</div>
-          <div class="placeholder-title">稼働入力</div>
-          <div class="placeholder-text">準備中</div>
+      <div id="saveBanner" class="save-banner">slotLog_v1 に保存しました</div>
+
+      <section class="section">
+        <div class="section-header"><div class="section-label">Session</div><div class="section-line"></div></div>
+        <div class="form-grid">
+          <div class="field-group">
+            <label class="field-label" for="sessionDate">日付</label>
+            <input id="sessionDate" class="input-field numeric" type="date">
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="shopSelect">店</label>
+            <select id="shopSelect" class="input-field"></select>
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="startTime">開始時間</label>
+            <input id="startTime" class="input-field numeric" type="time">
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="endTime">終了時間</label>
+            <input id="endTime" class="input-field numeric" type="time">
+          </div>
+          <div class="field-group">
+            <span class="field-label">稼働時間</span>
+            <div class="readonly-card">
+              <span class="readonly-label">自動計算</span>
+              <span id="kadoJikanDisplay" class="readonly-value">0.00h</span>
+            </div>
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="sessionKishu">機種</label>
+            <select id="sessionKishu" class="input-field"></select>
+          </div>
+          <div class="field-group full">
+            <label class="field-label" for="neraiMe">狙い目</label>
+            <input id="neraiMe" class="input-field" type="text" placeholder="例: 580G～ / リセット後 250G～">
+          </div>
         </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header"><div class="section-label">Medal & Profit</div><div class="section-line"></div></div>
+        <div class="form-grid single">
+          <div class="inline-split">
+            <div class="field-group">
+              <label class="field-label" for="kashiMedalValue">貸しメダル [枚]</label>
+              <input id="kashiMedalValue" class="input-field numeric" type="number" inputmode="numeric" step="1" min="0">
+            </div>
+            <div class="inline-symbol">/</div>
+            <div class="field-group">
+              <label class="field-label" for="kashiYenValue">貸しメダル [円]</label>
+              <input id="kashiYenValue" class="input-field numeric" type="number" inputmode="numeric" step="1" min="0">
+            </div>
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="kokanRateValue">交換率 [枚 / 100円]</label>
+            <input id="kokanRateValue" class="input-field numeric" type="number" inputmode="numeric" step="0.1" min="0">
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="form-grid">
+          <div class="field-group">
+            <label class="field-label" for="toshiValue">投資金額 [円]</label>
+            <input id="toshiValue" class="input-field numeric" type="number" inputmode="numeric" step="1" min="0">
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="toshiMedalValue">投資メダル [枚]</label>
+            <input id="toshiMedalValue" class="input-field numeric" type="number" inputmode="numeric" step="1" min="0">
+          </div>
+          <div class="field-group full">
+            <label class="field-label" for="kaishuValue">回収メダル [枚]</label>
+            <input id="kaishuValue" class="input-field numeric" type="number" inputmode="numeric" step="1" min="0">
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="metric-grid">
+          <div class="metric-card"><div class="metric-label">回収金額</div><div id="kaishuYenDisplay" class="metric-value neutral">¥0</div></div>
+          <div class="metric-card"><div class="metric-label">収支</div><div id="kosshiDisplay" class="metric-value neutral">¥0</div></div>
+          <div class="metric-card"><div class="metric-label">時給</div><div id="jikyuDisplay" class="metric-value neutral">¥0/h</div></div>
+          <div class="metric-card"><div class="metric-label">メダル投資換算</div><div id="medalInvestYenDisplay" class="metric-value neutral">¥0</div></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-header"><div class="section-label">Rotation</div><div class="section-line"></div></div>
+        <div class="form-grid triple">
+          <div class="field-group">
+            <label class="field-label" for="soKaitenValue">総回転数</label>
+            <input id="soKaitenValue" class="input-field numeric" type="number" inputmode="numeric" step="1" min="0">
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="tsujoKaitenValue">通常回転数</label>
+            <input id="tsujoKaitenValue" class="input-field numeric" type="number" inputmode="numeric" step="1" min="0">
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="atKaitenValue">AT中回転数</label>
+            <input id="atKaitenValue" class="input-field numeric" type="number" inputmode="numeric" step="1" min="0">
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="counter-toolbar">
+          <div class="section-header" style="margin-bottom:0;"><div class="section-label">子役カウンター</div><div class="section-line"></div></div>
+          <div class="toolbar-actions">
+            <button id="clearCountersBtn" type="button" class="danger-btn">全クリア</button>
+          </div>
+        </div>
+        <div class="field-group" style="margin-bottom:12px;">
+          <span class="field-label">分母選択</span>
+          <div class="radio-group" id="counterDenominatorGroup">
+            <label class="radio-chip"><input type="radio" name="counterDenominator" value="soKaiten" checked>総回転数</label>
+            <label class="radio-chip"><input type="radio" name="counterDenominator" value="tsujoKaiten">通常回転数</label>
+            <label class="radio-chip"><input type="radio" name="counterDenominator" value="atKaiten">AT中回転数</label>
+          </div>
+        </div>
+        <div id="counterList" class="counter-list"></div>
+      </section>
+
+      <section class="section">
+        <div class="counter-toolbar">
+          <div class="section-header" style="margin-bottom:0;"><div class="section-label">当たり記録</div><div class="section-line"></div></div>
+          <div class="toolbar-actions">
+            <button id="addHitRowBtn" type="button" class="soft-btn">＋ 行追加</button>
+          </div>
+        </div>
+        <div id="hitsList" class="hits-list"></div>
+      </section>
+
+      <div class="stack-actions">
+        <button id="saveLogBtn" type="button" class="primary-btn">記録する</button>
       </div>
     </section>
 
@@ -410,24 +834,35 @@ select.input-field {
       </div>
     </section>
 
-    <section id="tab-log" class="tab-content">
-      <div class="section placeholder-section">
-        <div class="placeholder-card">
-          <div class="placeholder-icon">📖</div>
-          <div class="placeholder-title">機種情報</div>
-          <div class="placeholder-text">このタブのみ実装済みです。下部メニューから表示できます。</div>
-        </div>
-      </div>
-    </section>
-
     <section id="tab-settings" class="tab-content">
-      <div class="section placeholder-section">
-        <div class="placeholder-card">
-          <div class="placeholder-icon">⚙️</div>
-          <div class="placeholder-title">設定</div>
-          <div class="placeholder-text">準備中</div>
+      <section class="section">
+        <div class="section-header"><div class="section-label">店マスタ</div><div class="section-line"></div></div>
+        <div class="form-grid">
+          <div class="field-group">
+            <label class="field-label" for="shopNameInput">店名</label>
+            <input id="shopNameInput" class="input-field" type="text" placeholder="例: ○○店">
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="shopKashiMedalInput">貸しメダル枚数</label>
+            <input id="shopKashiMedalInput" class="input-field numeric" type="number" inputmode="numeric" step="1" min="0">
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="shopKashiYenInput">貸しメダル円</label>
+            <input id="shopKashiYenInput" class="input-field numeric" type="number" inputmode="numeric" step="1" min="0">
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="shopKokanRateInput">交換率</label>
+            <input id="shopKokanRateInput" class="input-field numeric" type="number" inputmode="numeric" step="0.1" min="0">
+          </div>
         </div>
-      </div>
+        <div class="divider"></div>
+        <button id="saveShopBtn" type="button" class="primary-btn">追加</button>
+      </section>
+
+      <section class="section">
+        <div class="section-header"><div class="section-label">登録済み店一覧</div><div class="section-line"></div></div>
+        <div id="shopList" class="shop-list"></div>
+      </section>
     </section>
   </main>
 
@@ -435,7 +870,6 @@ select.input-field {
     <button type="button" class="nav-item" data-tab="kado"><div class="nav-icon">🎰</div><div class="nav-label">稼働入力</div></button>
     <button type="button" class="nav-item" data-tab="analysis"><div class="nav-icon">📊</div><div class="nav-label">分析</div></button>
     <button type="button" class="nav-item active" data-tab="machine"><div class="nav-icon">📖</div><div class="nav-label">機種情報</div></button>
-    <button type="button" class="nav-item" data-tab="log"><div class="nav-icon">📝</div><div class="nav-label">メモ</div></button>
     <button type="button" class="nav-item" data-tab="settings"><div class="nav-icon">⚙️</div><div class="nav-label">設定</div></button>
   </nav>
 </div>
@@ -731,10 +1165,32 @@ const KISHU_DATA = [
   },
 ];
 
+const STORAGE_KEYS = {
+  shops: 'slotShops_v1',
+  logs: 'slotLog_v1',
+};
+
+const DEFAULT_COUNTER_NAMES = ['黄', '緑', '赤', '白', '黒'];
+const VALID_TABS = ['kado', 'analysis', 'machine', 'settings'];
+
+function createDefaultCounters() {
+  return DEFAULT_COUNTER_NAMES.map((name) => ({ name, count: 0 }));
+}
+
+function createDefaultHits(count = 10) {
+  return Array.from({ length: count }, () => ({ g: '', keiki: '', biko: '' }));
+}
+
 const STATE = {
   activeTab: 'machine',
   activeSubtab: 'machine-info',
   selectedMachine: '',
+  shops: [],
+  counters: createDefaultCounters(),
+  counterDenominator: 'soKaiten',
+  hits: createDefaultHits(),
+  editingShopId: null,
+  bannerTimer: null,
 };
 
 const CIRCLED_NUMBERS = [
@@ -748,14 +1204,58 @@ function circledNumber(index) {
   return CIRCLED_NUMBERS[number] || `(${number})`;
 }
 
+function parseNumber(value) {
+  const number = Number.parseFloat(String(value ?? '').replace(/,/g, ''));
+  return Number.isFinite(number) ? number : 0;
+}
+
+function formatCurrency(value) {
+  const rounded = Math.round(value);
+  return `¥${rounded.toLocaleString('ja-JP')}`;
+}
+
+function formatTimeForInput(date) {
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function formatDateForInput(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function getMachineData() {
   return KISHU_DATA.find((item) => item.name === STATE.selectedMachine) || KISHU_DATA[0];
 }
 
-function populateMachineSelect() {
-  const select = document.getElementById('machineSelect');
-  select.innerHTML = KISHU_DATA.map((item) => `<option value="${item.name}">${item.name}</option>`).join('');
-  select.value = STATE.selectedMachine;
+function getSelectedShop() {
+  const id = document.getElementById('shopSelect').value;
+  return STATE.shops.find((shop) => String(shop.id) === id) || null;
+}
+
+function populateMachineSelects() {
+  const machineOptions = KISHU_DATA.map((item) => `<option value="${item.name}">${item.name}</option>`).join('');
+  const machineSelect = document.getElementById('machineSelect');
+  const sessionKishu = document.getElementById('sessionKishu');
+  machineSelect.innerHTML = machineOptions;
+  sessionKishu.innerHTML = machineOptions;
+  machineSelect.value = STATE.selectedMachine;
+  if (!sessionKishu.value) {
+    sessionKishu.value = STATE.selectedMachine;
+  }
+}
+
+function populateShopSelect() {
+  const shopSelect = document.getElementById('shopSelect');
+  const currentValue = shopSelect.value;
+  const options = ['<option value="">店を選択</option>']
+    .concat(STATE.shops.map((shop) => `<option value="${shop.id}">${shop.name}</option>`))
+    .join('');
+  shopSelect.innerHTML = options;
+  if (STATE.shops.some((shop) => String(shop.id) === currentValue)) {
+    shopSelect.value = currentValue;
+  }
 }
 
 function createNumberList(items) {
@@ -825,16 +1325,17 @@ function renderMachineTab() {
 }
 
 function setActiveTab(tabName) {
-  STATE.activeTab = tabName;
+  STATE.activeTab = VALID_TABS.includes(tabName) ? tabName : 'machine';
   document.querySelectorAll('.tab-content').forEach((panel) => {
-    panel.classList.toggle('active', panel.id === `tab-${tabName}`);
+    panel.classList.toggle('active', panel.id === `tab-${STATE.activeTab}`);
   });
   document.querySelectorAll('.nav-item').forEach((button) => {
-    const isActive = button.dataset.tab === tabName;
+    const isActive = button.dataset.tab === STATE.activeTab;
     button.classList.toggle('active', isActive);
     button.setAttribute('aria-selected', isActive ? 'true' : 'false');
   });
-  localStorage.setItem('appc-active-tab', tabName);
+  document.querySelector('.selector-bar').classList.toggle('hidden', STATE.activeTab !== 'machine');
+  localStorage.setItem('appc-active-tab', STATE.activeTab);
 }
 
 function setActiveSubtab(subtabName) {
@@ -861,13 +1362,356 @@ function restoreState() {
     STATE.selectedMachine = KISHU_DATA[0].name;
   }
 
-  if (savedTab) {
+  if (savedTab && VALID_TABS.includes(savedTab)) {
     STATE.activeTab = savedTab;
   }
 
   if (savedSubtab) {
     STATE.activeSubtab = savedSubtab;
   }
+
+  try {
+    const shops = JSON.parse(localStorage.getItem(STORAGE_KEYS.shops) || '[]');
+    STATE.shops = Array.isArray(shops) ? shops : [];
+  } catch {
+    STATE.shops = [];
+  }
+}
+
+function setSessionDefaults() {
+  const now = new Date();
+  const dateInput = document.getElementById('sessionDate');
+  const startInput = document.getElementById('startTime');
+  const endInput = document.getElementById('endTime');
+  if (!dateInput.value) {
+    dateInput.value = formatDateForInput(now);
+  }
+  if (!startInput.value) {
+    startInput.value = formatTimeForInput(now);
+  }
+  if (!endInput.value) {
+    endInput.value = formatTimeForInput(now);
+  }
+}
+
+function getKadoHours() {
+  const start = document.getElementById('startTime').value;
+  const end = document.getElementById('endTime').value;
+  if (!start || !end) {
+    return 0;
+  }
+  const [startHour, startMinute] = start.split(':').map((value) => Number.parseInt(value, 10) || 0);
+  const [endHour, endMinute] = end.split(':').map((value) => Number.parseInt(value, 10) || 0);
+  let startMinutes = startHour * 60 + startMinute;
+  let endMinutes = endHour * 60 + endMinute;
+  if (endMinutes < startMinutes) {
+    endMinutes += 24 * 60;
+  }
+  return Math.max(0, (endMinutes - startMinutes) / 60);
+}
+
+function getRotationTotals() {
+  return {
+    soKaiten: parseNumber(document.getElementById('soKaitenValue').value),
+    tsujoKaiten: parseNumber(document.getElementById('tsujoKaitenValue').value),
+    atKaiten: parseNumber(document.getElementById('atKaitenValue').value),
+  };
+}
+
+function getProbabilityText(count) {
+  const totals = getRotationTotals();
+  const denominator = totals[STATE.counterDenominator] || 0;
+  if (count <= 0 || denominator <= 0) {
+    return '1/- (-%)';
+  }
+  const rate = denominator / count;
+  const percentage = (count / denominator) * 100;
+  return `1/${rate.toFixed(1)} (${percentage.toFixed(2)}%)`;
+}
+
+function updateMetricValue(elementId, value, suffix = '') {
+  const element = document.getElementById(elementId);
+  element.textContent = `${formatCurrency(value)}${suffix}`;
+  element.classList.remove('pos', 'neg', 'neutral');
+  if (value > 0) {
+    element.classList.add('pos');
+  } else if (value < 0) {
+    element.classList.add('neg');
+  } else {
+    element.classList.add('neutral');
+  }
+}
+
+function updateCounterStats() {
+  document.querySelectorAll('[data-counter-stat]').forEach((element) => {
+    const index = Number.parseInt(element.dataset.counterStat, 10);
+    element.textContent = getProbabilityText(STATE.counters[index].count);
+  });
+}
+
+function updateSessionMetrics() {
+  const kadoHours = getKadoHours();
+  const kokanRate = parseNumber(document.getElementById('kokanRateValue').value);
+  const toshi = parseNumber(document.getElementById('toshiValue').value);
+  const toshiMedal = parseNumber(document.getElementById('toshiMedalValue').value);
+  const kaishu = parseNumber(document.getElementById('kaishuValue').value);
+  const kaishuYen = kokanRate > 0 ? (kaishu / kokanRate) * 100 : 0;
+  const medalInvestYen = kokanRate > 0 ? (toshiMedal / kokanRate) * 100 : 0;
+  const kosshi = kaishuYen - toshi - medalInvestYen;
+  const jikyu = kadoHours > 0 ? kosshi / kadoHours : 0;
+
+  document.getElementById('kadoJikanDisplay').textContent = `${kadoHours.toFixed(2)}h`;
+  document.getElementById('medalInvestYenDisplay').textContent = formatCurrency(medalInvestYen);
+  document.getElementById('medalInvestYenDisplay').className = 'metric-value neutral';
+  document.getElementById('kaishuYenDisplay').textContent = formatCurrency(kaishuYen);
+  document.getElementById('kaishuYenDisplay').className = 'metric-value neutral';
+  updateMetricValue('kosshiDisplay', kosshi);
+  updateMetricValue('jikyuDisplay', jikyu, '/h');
+  updateCounterStats();
+}
+
+function renderCounters() {
+  const counterList = document.getElementById('counterList');
+  counterList.innerHTML = STATE.counters.map((counter, index) => `
+    <div class="counter-row">
+      <div class="counter-top">
+        <button type="button" class="counter-name-btn" data-counter-name="${index}">${counter.name}</button>
+        <input class="input-field numeric counter-number" type="number" inputmode="numeric" min="0" step="1" value="${counter.count}" data-counter-input="${index}">
+        <button type="button" class="counter-step" data-counter-minus="${index}">-</button>
+        <button type="button" class="counter-step" data-counter-plus="${index}">+</button>
+      </div>
+      <div class="counter-stat" data-counter-stat="${index}">${getProbabilityText(counter.count)}</div>
+    </div>
+  `).join('');
+
+  counterList.querySelectorAll('[data-counter-name]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const index = Number.parseInt(button.dataset.counterName, 10);
+      const nextName = window.prompt('名前を入力してください', STATE.counters[index].name);
+      if (nextName !== null && nextName.trim()) {
+        STATE.counters[index].name = nextName.trim();
+        renderCounters();
+      }
+    });
+  });
+
+  counterList.querySelectorAll('[data-counter-input]').forEach((input) => {
+    input.addEventListener('input', () => {
+      const index = Number.parseInt(input.dataset.counterInput, 10);
+      STATE.counters[index].count = Math.max(0, Math.floor(parseNumber(input.value)));
+      updateCounterStats();
+    });
+  });
+
+  counterList.querySelectorAll('[data-counter-minus]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const index = Number.parseInt(button.dataset.counterMinus, 10);
+      STATE.counters[index].count = Math.max(0, STATE.counters[index].count - 1);
+      const input = counterList.querySelector(`[data-counter-input="${index}"]`);
+      if (input) {
+        input.value = STATE.counters[index].count;
+      }
+      updateCounterStats();
+    });
+  });
+
+  counterList.querySelectorAll('[data-counter-plus]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const index = Number.parseInt(button.dataset.counterPlus, 10);
+      STATE.counters[index].count += 1;
+      const input = counterList.querySelector(`[data-counter-input="${index}"]`);
+      if (input) {
+        input.value = STATE.counters[index].count;
+      }
+      updateCounterStats();
+    });
+  });
+}
+
+function renderHits() {
+  const hitsList = document.getElementById('hitsList');
+  hitsList.innerHTML = STATE.hits.map((hit, index) => `
+    <div class="hit-row">
+      <input class="input-field numeric" type="number" inputmode="numeric" min="0" step="1" placeholder="G数" value="${hit.g}" data-hit-field="g" data-hit-index="${index}">
+      <input class="input-field" type="text" placeholder="契機" value="${hit.keiki}" data-hit-field="keiki" data-hit-index="${index}">
+      <input class="input-field" type="text" placeholder="備考" value="${hit.biko}" data-hit-field="biko" data-hit-index="${index}">
+      <button type="button" class="icon-btn" data-hit-delete="${index}">×</button>
+    </div>
+  `).join('');
+
+  hitsList.querySelectorAll('[data-hit-field]').forEach((input) => {
+    input.addEventListener('input', () => {
+      const index = Number.parseInt(input.dataset.hitIndex, 10);
+      const field = input.dataset.hitField;
+      STATE.hits[index][field] = input.value;
+    });
+  });
+
+  hitsList.querySelectorAll('[data-hit-delete]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const index = Number.parseInt(button.dataset.hitDelete, 10);
+      STATE.hits.splice(index, 1);
+      renderHits();
+    });
+  });
+}
+
+function renderShopList() {
+  const shopList = document.getElementById('shopList');
+  if (STATE.shops.length === 0) {
+    shopList.innerHTML = '<div class="empty-state">店マスタはまだ登録されていません。</div>';
+    return;
+  }
+
+  shopList.innerHTML = STATE.shops.map((shop) => `
+    <div class="shop-row">
+      <div class="shop-info">
+        <div class="shop-name">${shop.name}</div>
+        <div class="shop-meta">${shop.kashiMedal}枚/${shop.kashiYen}円　${shop.kokanRate}枚交換</div>
+      </div>
+      <div class="shop-actions">
+        <button type="button" class="soft-btn" data-shop-edit="${shop.id}">編集</button>
+        <button type="button" class="danger-btn" data-shop-delete="${shop.id}">削除</button>
+      </div>
+    </div>
+  `).join('');
+
+  shopList.querySelectorAll('[data-shop-edit]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = button.dataset.shopEdit;
+      const shop = STATE.shops.find((item) => String(item.id) === id);
+      if (!shop) {
+        return;
+      }
+      STATE.editingShopId = shop.id;
+      document.getElementById('shopNameInput').value = shop.name;
+      document.getElementById('shopKashiMedalInput').value = shop.kashiMedal;
+      document.getElementById('shopKashiYenInput').value = shop.kashiYen;
+      document.getElementById('shopKokanRateInput').value = shop.kokanRate;
+      document.getElementById('saveShopBtn').textContent = '更新';
+    });
+  });
+
+  shopList.querySelectorAll('[data-shop-delete]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = button.dataset.shopDelete;
+      if (!window.confirm('この店を削除しますか？')) {
+        return;
+      }
+      const currentSelected = document.getElementById('shopSelect').value;
+      STATE.shops = STATE.shops.filter((shop) => String(shop.id) !== id);
+      localStorage.setItem(STORAGE_KEYS.shops, JSON.stringify(STATE.shops));
+      renderShopList();
+      populateShopSelect();
+      if (currentSelected === id) {
+        document.getElementById('shopSelect').value = '';
+      }
+    });
+  });
+}
+
+function resetShopForm() {
+  STATE.editingShopId = null;
+  document.getElementById('shopNameInput').value = '';
+  document.getElementById('shopKashiMedalInput').value = '';
+  document.getElementById('shopKashiYenInput').value = '';
+  document.getElementById('shopKokanRateInput').value = '';
+  document.getElementById('saveShopBtn').textContent = '追加';
+}
+
+function saveShop() {
+  const name = document.getElementById('shopNameInput').value.trim();
+  const kashiMedal = Math.floor(parseNumber(document.getElementById('shopKashiMedalInput').value));
+  const kashiYen = Math.floor(parseNumber(document.getElementById('shopKashiYenInput').value));
+  const kokanRate = parseNumber(document.getElementById('shopKokanRateInput').value);
+
+  if (!name || !kashiMedal || !kashiYen || !kokanRate) {
+    window.alert('店名・貸しメダル・円・交換率を入力してください。');
+    return;
+  }
+
+  if (STATE.editingShopId !== null) {
+    STATE.shops = STATE.shops.map((shop) => (
+      shop.id === STATE.editingShopId
+        ? { ...shop, name, kashiMedal, kashiYen, kokanRate }
+        : shop
+    ));
+  } else {
+    STATE.shops.push({ id: Date.now(), name, kashiMedal, kashiYen, kokanRate });
+  }
+
+  localStorage.setItem(STORAGE_KEYS.shops, JSON.stringify(STATE.shops));
+  renderShopList();
+  populateShopSelect();
+  resetShopForm();
+}
+
+function applyShopPreset() {
+  const shop = getSelectedShop();
+  if (!shop) {
+    return;
+  }
+  document.getElementById('kashiMedalValue').value = shop.kashiMedal;
+  document.getElementById('kashiYenValue').value = shop.kashiYen;
+  document.getElementById('kokanRateValue').value = shop.kokanRate;
+  updateSessionMetrics();
+}
+
+function flashSaveBanner() {
+  const banner = document.getElementById('saveBanner');
+  banner.classList.add('show');
+  clearTimeout(STATE.bannerTimer);
+  STATE.bannerTimer = window.setTimeout(() => banner.classList.remove('show'), 1600);
+}
+
+function saveLog() {
+  const shop = getSelectedShop();
+  const kadoJikan = Number(getKadoHours().toFixed(2));
+  const kokanRate = parseNumber(document.getElementById('kokanRateValue').value);
+  const toshi = parseNumber(document.getElementById('toshiValue').value);
+  const toshiMedal = parseNumber(document.getElementById('toshiMedalValue').value);
+  const kaishu = parseNumber(document.getElementById('kaishuValue').value);
+  const kaishuYen = kokanRate > 0 ? (kaishu / kokanRate) * 100 : 0;
+  const kosshi = kaishuYen - toshi - (kokanRate > 0 ? (toshiMedal / kokanRate) * 100 : 0);
+  const jikyu = kadoJikan > 0 ? kosshi / kadoJikan : 0;
+  const totals = getRotationTotals();
+
+  const record = {
+    id: Date.now(),
+    date: document.getElementById('sessionDate').value,
+    startTime: document.getElementById('startTime').value,
+    endTime: document.getElementById('endTime').value,
+    kadoJikan,
+    shop: shop ? shop.name : '',
+    kishu: document.getElementById('sessionKishu').value,
+    neraiMe: document.getElementById('neraiMe').value.trim(),
+    kashiMedal: parseNumber(document.getElementById('kashiMedalValue').value),
+    kokanRate,
+    toshi,
+    toshiMedal,
+    kaishu,
+    kaishuYen: Number(kaishuYen.toFixed(2)),
+    kosshi: Number(kosshi.toFixed(2)),
+    jikyu: Number(jikyu.toFixed(2)),
+    soKaiten: totals.soKaiten,
+    tsujoKaiten: totals.tsujoKaiten,
+    atKaiten: totals.atKaiten,
+    counters: STATE.counters.map((counter) => ({ name: counter.name, count: counter.count })),
+    hits: STATE.hits
+      .filter((hit) => String(hit.g).trim() || hit.keiki.trim() || hit.biko.trim())
+      .map((hit) => ({ g: hit.g, keiki: hit.keiki, biko: hit.biko })),
+  };
+
+  let logs = [];
+  try {
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEYS.logs) || '[]');
+    logs = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    logs = [];
+  }
+  logs.push(record);
+  localStorage.setItem(STORAGE_KEYS.logs, JSON.stringify(logs));
+  flashSaveBanner();
 }
 
 function bindEvents() {
@@ -884,14 +1728,51 @@ function bindEvents() {
   document.querySelectorAll('.subtab-btn').forEach((button) => {
     button.addEventListener('click', () => setActiveSubtab(button.dataset.subtab));
   });
+
+  document.getElementById('shopSelect').addEventListener('change', applyShopPreset);
+  document.getElementById('saveShopBtn').addEventListener('click', saveShop);
+  document.getElementById('saveLogBtn').addEventListener('click', saveLog);
+  document.getElementById('addHitRowBtn').addEventListener('click', () => {
+    STATE.hits.push({ g: '', keiki: '', biko: '' });
+    renderHits();
+  });
+  document.getElementById('clearCountersBtn').addEventListener('click', () => {
+    if (!window.confirm('カウンターをリセットしますか？')) {
+      return;
+    }
+    STATE.counters = createDefaultCounters();
+    renderCounters();
+  });
+
+  document.getElementById('counterDenominatorGroup').querySelectorAll('input').forEach((radio) => {
+    radio.addEventListener('change', () => {
+      STATE.counterDenominator = radio.value;
+      renderCounters();
+    });
+  });
+
+  [
+    'startTime', 'endTime', 'kashiMedalValue', 'kashiYenValue', 'kokanRateValue',
+    'toshiValue', 'toshiMedalValue', 'kaishuValue',
+    'soKaitenValue', 'tsujoKaitenValue', 'atKaitenValue',
+  ].forEach((id) => {
+    document.getElementById(id).addEventListener('input', updateSessionMetrics);
+    document.getElementById(id).addEventListener('change', updateSessionMetrics);
+  });
 }
 
 function init() {
   restoreState();
-  populateMachineSelect();
+  populateMachineSelects();
+  populateShopSelect();
   renderMachineTab();
+  renderCounters();
+  renderHits();
+  renderShopList();
+  setSessionDefaults();
   setActiveTab(STATE.activeTab);
   setActiveSubtab(STATE.activeSubtab);
+  updateSessionMetrics();
   bindEvents();
 }
 
