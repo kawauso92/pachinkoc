@@ -361,16 +361,24 @@ select.input-field {
   border:1px solid var(--border);
   border-radius:var(--radius-sm);
   background:linear-gradient(135deg, rgba(0,212,255,0.06), rgba(20,27,36,0.85));
+  min-width:0;
+  overflow:hidden;
 }
 .readonly-label {
   color:var(--text2);
   font-size:11px;
+  min-width:0;
 }
 .readonly-value {
   font-family:"JetBrains Mono",monospace;
-  font-size:15px;
+  font-size:14px;
   font-weight:700;
   color:var(--accent);
+  min-width:0;
+  text-align:right;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
 }
 .metric-grid {
   display:grid;
@@ -449,6 +457,7 @@ select.input-field {
 .toolbar-actions {
   display:flex;
   gap:8px;
+  flex-wrap:wrap;
 }
 .soft-btn,
 .primary-btn,
@@ -476,56 +485,120 @@ select.input-field {
   border:1px solid rgba(255,68,102,0.28);
   color:var(--red);
 }
-.counter-list {
+.counter-panel {
   display:grid;
-  gap:10px;
+  gap:12px;
 }
-.counter-row {
+.counter-strip {
+  display:grid;
+  grid-template-columns:repeat(5, minmax(0, 1fr));
+  gap:6px;
+}
+.counter-tile {
   background:var(--surface2);
   border:1px solid var(--border);
   border-radius:var(--radius-sm);
-  padding:10px;
+  padding:8px 6px;
   display:grid;
-  gap:8px;
+  gap:6px;
+  min-width:0;
 }
-.counter-top {
-  display:grid;
-  grid-template-columns:minmax(72px, auto) 1fr auto auto;
-  gap:8px;
-  align-items:center;
-}
-.counter-name-btn {
-  min-height:40px;
-  padding:0 10px;
+.counter-tap-btn {
+  min-height:36px;
+  padding:0 4px;
   border-radius:var(--radius-sm);
-  border:1px solid rgba(0,212,255,0.28);
+  border:1px solid rgba(0,212,255,0.25);
   background:rgba(0,212,255,0.08);
   color:var(--accent);
   font-family:"Rajdhani",sans-serif;
-  font-size:15px;
+  font-size:14px;
   font-weight:700;
   cursor:pointer;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.counter-tap-btn.minus-mode {
+  border-color:rgba(255,68,102,0.28);
+  background:rgba(255,68,102,0.08);
+  color:var(--red);
 }
 .counter-number {
   width:100%;
-  min-height:40px;
+  min-height:34px;
   text-align:center;
-}
-.counter-step {
-  width:40px;
-  height:40px;
-  border-radius:var(--radius-sm);
-  border:1px solid var(--border);
-  background:var(--surface3);
-  color:var(--text);
-  font-size:22px;
-  line-height:1;
-  cursor:pointer;
+  padding:8px 6px;
+  font-size:16px;
 }
 .counter-stat {
   color:var(--text2);
-  font-size:12px;
+  font-size:10px;
   font-family:"JetBrains Mono",monospace;
+  text-align:center;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.toggle-btn.active {
+  background:rgba(255,68,102,0.12);
+  border-color:rgba(255,68,102,0.32);
+  color:var(--red);
+}
+.inline-editor {
+  display:none;
+  margin-top:12px;
+  padding:12px;
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  background:rgba(20,27,36,0.9);
+}
+.inline-editor.show {
+  display:grid;
+  gap:10px;
+}
+.editor-row {
+  display:grid;
+  grid-template-columns:48px 1fr;
+  gap:8px;
+  align-items:center;
+}
+.editor-actions {
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.selector-controls {
+  display:grid;
+  grid-template-columns:minmax(0, 1fr) auto;
+  gap:8px;
+  align-items:end;
+}
+.hero-actions {
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-top:12px;
+}
+.machine-editor {
+  display:none;
+  margin-top:10px;
+}
+.machine-editor.show {
+  display:block;
+}
+.textarea-field {
+  min-height:96px;
+  resize:vertical;
+  line-height:1.6;
+}
+.machine-editor-grid {
+  display:grid;
+  gap:10px;
+}
+.machine-editor-actions {
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
 }
 .hits-list {
   display:grid;
@@ -535,20 +608,25 @@ select.input-field {
   background:var(--surface2);
   border:1px solid var(--border);
   border-radius:var(--radius-sm);
-  padding:10px;
+  padding:6px;
   display:grid;
-  grid-template-columns:84px 1fr 1fr auto;
-  gap:8px;
+  grid-template-columns:70px 92px minmax(0, 1fr) 28px;
+  gap:6px;
   align-items:center;
 }
+.hit-row .input-field {
+  min-height:30px;
+  padding:6px 8px;
+  font-size:13px;
+}
 .icon-btn {
-  width:38px;
-  height:38px;
+  width:28px;
+  height:28px;
   border-radius:var(--radius-sm);
   border:1px solid rgba(255,68,102,0.25);
   background:rgba(255,68,102,0.08);
   color:var(--red);
-  font-size:18px;
+  font-size:14px;
   cursor:pointer;
 }
 .stack-actions {
@@ -609,13 +687,18 @@ select.input-field {
 @media (max-width:360px) {
   .stats-grid { grid-template-columns:repeat(2, 1fr); }
   .hero-title { font-size:19px; }
-  .hit-row { grid-template-columns:1fr; }
-  .counter-top { grid-template-columns:1fr 1fr auto auto; }
+  .hit-row { grid-template-columns:64px 76px minmax(0, 1fr) 28px; }
+  .counter-strip { gap:4px; }
+  .counter-tile { padding:6px 4px; }
+  .counter-tap-btn { font-size:12px; min-height:32px; }
+  .counter-number { font-size:14px; min-height:30px; }
+  .counter-stat { font-size:9px; }
   .metric-grid,
   .form-grid,
   .form-grid.triple { grid-template-columns:1fr; }
   .inline-split { grid-template-columns:1fr; }
   .inline-symbol { display:none; }
+  .selector-controls { grid-template-columns:1fr; }
 }
 </style>
 </head>
@@ -635,7 +718,10 @@ select.input-field {
         <div class="selector-label">機種選択</div>
         <div class="selector-caption">固定表示</div>
       </div>
-      <select id="machineSelect" class="input-field" aria-label="機種選択"></select>
+      <div class="selector-controls">
+        <select id="machineSelect" class="input-field" aria-label="機種選択"></select>
+        <button id="addMachineBtn" type="button" class="primary-btn">＋ 機種追加</button>
+      </div>
     </div>
   </div>
 
@@ -749,6 +835,8 @@ select.input-field {
         <div class="counter-toolbar">
           <div class="section-header" style="margin-bottom:0;"><div class="section-label">子役カウンター</div><div class="section-line"></div></div>
           <div class="toolbar-actions">
+            <button id="counterMinusToggleBtn" type="button" class="soft-btn toggle-btn">マイナス切り替え</button>
+            <button id="editCounterNamesBtn" type="button" class="soft-btn">名前編集</button>
             <button id="clearCountersBtn" type="button" class="danger-btn">全クリア</button>
           </div>
         </div>
@@ -760,7 +848,14 @@ select.input-field {
             <label class="radio-chip"><input type="radio" name="counterDenominator" value="atKaiten">AT中回転数</label>
           </div>
         </div>
-        <div id="counterList" class="counter-list"></div>
+        <div id="counterList" class="counter-panel"></div>
+        <div id="counterNameEditor" class="inline-editor">
+          <div id="counterNameEditorRows"></div>
+          <div class="editor-actions">
+            <button id="saveCounterNamesBtn" type="button" class="primary-btn">保存</button>
+            <button id="cancelCounterNamesBtn" type="button" class="soft-btn">キャンセル</button>
+          </div>
+        </div>
       </section>
 
       <section class="section">
@@ -796,6 +891,10 @@ select.input-field {
         </div>
         <div id="machineName" class="hero-title"></div>
         <div class="hero-sub">機種情報とねらい目を、同じ画面内で素早く切り替えて確認できます。</div>
+        <div class="hero-actions">
+          <button id="editMachineBtn" type="button" class="soft-btn">編集</button>
+          <button id="deleteMachineBtn" type="button" class="danger-btn">削除</button>
+        </div>
         <div class="stats-grid">
           <div class="stat-card"><div id="tenjoCount" class="stat-value">0</div><div class="stat-label">TENJO</div></div>
           <div class="stat-card"><div id="tokuseiCount" class="stat-value">0</div><div class="stat-label">TOKUSEI</div></div>
@@ -803,6 +902,37 @@ select.input-field {
           <div class="stat-card"><div id="zoneCount" class="stat-value">0</div><div class="stat-label">ZONE</div></div>
         </div>
       </div>
+
+      <section id="machineEditor" class="section machine-editor">
+        <div class="section-header"><div class="section-label">機種追加・編集</div><div class="section-line"></div></div>
+        <div class="machine-editor-grid">
+          <div class="field-group">
+            <label class="field-label" for="machineNameInput">機種名</label>
+            <input id="machineNameInput" class="input-field" type="text" placeholder="機種名を入力">
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="machineTenjoInput">天井</label>
+            <textarea id="machineTenjoInput" class="input-field textarea-field" placeholder="1行1項目"></textarea>
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="machineTokuseiInput">機種特性</label>
+            <textarea id="machineTokuseiInput" class="input-field textarea-field" placeholder="1行1項目"></textarea>
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="machineResetInput">リセット</label>
+            <textarea id="machineResetInput" class="input-field textarea-field" placeholder="1行1項目"></textarea>
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="machineZoneInput">ゾーン</label>
+            <textarea id="machineZoneInput" class="input-field textarea-field" placeholder="1行1項目"></textarea>
+          </div>
+        </div>
+        <div class="divider"></div>
+        <div class="machine-editor-actions">
+          <button id="saveMachineBtn" type="button" class="primary-btn">保存</button>
+          <button id="cancelMachineBtn" type="button" class="soft-btn">キャンセル</button>
+        </div>
+      </section>
 
       <div class="subtabs" role="tablist" aria-label="機種情報サブタブ">
         <button type="button" class="subtab-btn active" data-subtab="machine-info" aria-selected="true">機種情報</button>
@@ -1168,6 +1298,8 @@ const KISHU_DATA = [
 const STORAGE_KEYS = {
   shops: 'slotShops_v1',
   logs: 'slotLog_v1',
+  kishu: 'slotKishu_v1',
+  counterNames: 'slotCounterNames_v1',
 };
 
 const DEFAULT_COUNTER_NAMES = ['黄', '緑', '赤', '白', '黒'];
@@ -1185,11 +1317,17 @@ const STATE = {
   activeTab: 'machine',
   activeSubtab: 'machine-info',
   selectedMachine: '',
+  machineOverrides: [],
+  mergedMachines: [],
   shops: [],
   counters: createDefaultCounters(),
   counterDenominator: 'soKaiten',
+  counterMinusMode: false,
   hits: createDefaultHits(),
   editingShopId: null,
+  editingMachineName: null,
+  machineEditorOpen: false,
+  counterNameEditorOpen: false,
   bannerTimer: null,
 };
 
@@ -1225,8 +1363,59 @@ function formatDateForInput(date) {
   return `${year}-${month}-${day}`;
 }
 
+function parseLines(value) {
+  return String(value || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function linesToText(items) {
+  return Array.isArray(items) ? items.join('\n') : '';
+}
+
+function getStoredMachineEntries() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEYS.kishu) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function getMergedMachines() {
+  const machineMap = new Map(KISHU_DATA.map((item) => [item.name, {
+    name: item.name,
+    tenjo: [...item.tenjo],
+    tokusei: [...item.tokusei],
+    reset: [...item.reset],
+    zone: [...item.zone],
+    source: 'base',
+  }]));
+
+  STATE.machineOverrides.forEach((item) => {
+    if (!item || !item.name) {
+      return;
+    }
+    if (item.deleted) {
+      machineMap.delete(item.name);
+      return;
+    }
+    machineMap.set(item.name, {
+      name: item.name,
+      tenjo: Array.isArray(item.tenjo) ? [...item.tenjo] : [],
+      tokusei: Array.isArray(item.tokusei) ? [...item.tokusei] : [],
+      reset: Array.isArray(item.reset) ? [...item.reset] : [],
+      zone: Array.isArray(item.zone) ? [...item.zone] : [],
+      source: 'custom',
+    });
+  });
+
+  return Array.from(machineMap.values()).sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+}
+
 function getMachineData() {
-  return KISHU_DATA.find((item) => item.name === STATE.selectedMachine) || KISHU_DATA[0];
+  return STATE.mergedMachines.find((item) => item.name === STATE.selectedMachine) || STATE.mergedMachines[0];
 }
 
 function getSelectedShop() {
@@ -1235,13 +1424,16 @@ function getSelectedShop() {
 }
 
 function populateMachineSelects() {
-  const machineOptions = KISHU_DATA.map((item) => `<option value="${item.name}">${item.name}</option>`).join('');
+  const machineOptions = STATE.mergedMachines.map((item) => `<option value="${item.name}">${item.name}</option>`).join('');
   const machineSelect = document.getElementById('machineSelect');
   const sessionKishu = document.getElementById('sessionKishu');
   machineSelect.innerHTML = machineOptions;
   sessionKishu.innerHTML = machineOptions;
+  if (!STATE.mergedMachines.some((item) => item.name === STATE.selectedMachine)) {
+    STATE.selectedMachine = STATE.mergedMachines[0]?.name || '';
+  }
   machineSelect.value = STATE.selectedMachine;
-  if (!sessionKishu.value) {
+  if (!STATE.mergedMachines.some((item) => item.name === sessionKishu.value)) {
     sessionKishu.value = STATE.selectedMachine;
   }
 }
@@ -1319,9 +1511,119 @@ function renderTargets(data) {
 
 function renderMachineTab() {
   const data = getMachineData();
+  if (!data) {
+    return;
+  }
   renderMachineCounts(data);
   renderMachineInfo(data);
   renderTargets(data);
+  const deleteButton = document.getElementById('deleteMachineBtn');
+  deleteButton.disabled = STATE.mergedMachines.length <= 1;
+}
+
+function setMachineEditorVisibility(isOpen) {
+  STATE.machineEditorOpen = isOpen;
+  document.getElementById('machineEditor').classList.toggle('show', isOpen);
+}
+
+function resetMachineEditor() {
+  STATE.editingMachineName = null;
+  document.getElementById('machineNameInput').value = '';
+  document.getElementById('machineTenjoInput').value = '';
+  document.getElementById('machineTokuseiInput').value = '';
+  document.getElementById('machineResetInput').value = '';
+  document.getElementById('machineZoneInput').value = '';
+}
+
+function openMachineEditor(machineName = null) {
+  const machine = machineName
+    ? STATE.mergedMachines.find((item) => item.name === machineName)
+    : null;
+  STATE.editingMachineName = machine ? machine.name : null;
+  document.getElementById('machineNameInput').value = machine ? machine.name : '';
+  document.getElementById('machineTenjoInput').value = machine ? linesToText(machine.tenjo) : '';
+  document.getElementById('machineTokuseiInput').value = machine ? linesToText(machine.tokusei) : '';
+  document.getElementById('machineResetInput').value = machine ? linesToText(machine.reset) : '';
+  document.getElementById('machineZoneInput').value = machine ? linesToText(machine.zone) : '';
+  setMachineEditorVisibility(true);
+}
+
+function persistMachineOverrides() {
+  localStorage.setItem(STORAGE_KEYS.kishu, JSON.stringify(STATE.machineOverrides));
+  STATE.mergedMachines = getMergedMachines();
+  populateMachineSelects();
+  renderMachineTab();
+}
+
+function saveMachine() {
+  const name = document.getElementById('machineNameInput').value.trim();
+  if (!name) {
+    window.alert('機種名を入力してください。');
+    return;
+  }
+
+  const payload = {
+    name,
+    tenjo: parseLines(document.getElementById('machineTenjoInput').value),
+    tokusei: parseLines(document.getElementById('machineTokuseiInput').value),
+    reset: parseLines(document.getElementById('machineResetInput').value),
+    zone: parseLines(document.getElementById('machineZoneInput').value),
+  };
+
+  const originalName = STATE.editingMachineName;
+  STATE.machineOverrides = STATE.machineOverrides.filter((item) => item.name !== name && item.name !== originalName);
+  if (originalName && originalName !== name) {
+    STATE.machineOverrides.push({ name: originalName, deleted: true });
+  }
+  STATE.machineOverrides.push(payload);
+  persistMachineOverrides();
+  STATE.selectedMachine = name;
+  localStorage.setItem('appc-selected-machine', STATE.selectedMachine);
+  populateMachineSelects();
+  renderMachineTab();
+  resetMachineEditor();
+  setMachineEditorVisibility(false);
+}
+
+function deleteCurrentMachine() {
+  const machine = getMachineData();
+  if (!machine) {
+    return;
+  }
+  if (!window.confirm(`「${machine.name}」を削除しますか？`)) {
+    return;
+  }
+  STATE.machineOverrides = STATE.machineOverrides.filter((item) => item.name !== machine.name);
+  STATE.machineOverrides.push({ name: machine.name, deleted: true });
+  persistMachineOverrides();
+  STATE.selectedMachine = STATE.mergedMachines[0]?.name || '';
+  localStorage.setItem('appc-selected-machine', STATE.selectedMachine);
+  populateMachineSelects();
+  renderMachineTab();
+}
+
+function setCounterNameEditorVisibility(isOpen) {
+  STATE.counterNameEditorOpen = isOpen;
+  document.getElementById('counterNameEditor').classList.toggle('show', isOpen);
+}
+
+function renderCounterNameEditor() {
+  document.getElementById('counterNameEditorRows').innerHTML = STATE.counters.map((counter, index) => `
+    <div class="editor-row">
+      <span class="field-label">${DEFAULT_COUNTER_NAMES[index]}</span>
+      <input class="input-field" type="text" value="${counter.name}" data-counter-name-editor="${index}">
+    </div>
+  `).join('');
+}
+
+function saveCounterNames() {
+  document.querySelectorAll('[data-counter-name-editor]').forEach((input) => {
+    const index = Number.parseInt(input.dataset.counterNameEditor, 10);
+    STATE.counters[index].name = input.value.trim() || DEFAULT_COUNTER_NAMES[index];
+  });
+  localStorage.setItem(STORAGE_KEYS.counterNames, JSON.stringify(STATE.counters.map((counter) => counter.name)));
+  setCounterNameEditorVisibility(false);
+  renderCounters();
 }
 
 function setActiveTab(tabName) {
@@ -1356,10 +1658,13 @@ function restoreState() {
   const savedTab = localStorage.getItem('appc-active-tab');
   const savedSubtab = localStorage.getItem('appc-active-subtab');
 
-  if (savedMachine && KISHU_DATA.some((item) => item.name === savedMachine)) {
+  STATE.machineOverrides = getStoredMachineEntries();
+  STATE.mergedMachines = getMergedMachines();
+
+  if (savedMachine && STATE.mergedMachines.some((item) => item.name === savedMachine)) {
     STATE.selectedMachine = savedMachine;
   } else {
-    STATE.selectedMachine = KISHU_DATA[0].name;
+    STATE.selectedMachine = STATE.mergedMachines[0]?.name || '';
   }
 
   if (savedTab && VALID_TABS.includes(savedTab)) {
@@ -1375,6 +1680,18 @@ function restoreState() {
     STATE.shops = Array.isArray(shops) ? shops : [];
   } catch {
     STATE.shops = [];
+  }
+
+  try {
+    const names = JSON.parse(localStorage.getItem(STORAGE_KEYS.counterNames) || '[]');
+    if (Array.isArray(names) && names.length === DEFAULT_COUNTER_NAMES.length) {
+      STATE.counters = names.map((name, index) => ({
+        name: String(name || DEFAULT_COUNTER_NAMES[index]),
+        count: 0,
+      }));
+    }
+  } catch {
+    STATE.counters = createDefaultCounters();
   }
 }
 
@@ -1426,7 +1743,7 @@ function getProbabilityText(count) {
   }
   const rate = denominator / count;
   const percentage = (count / denominator) * 100;
-  return `1/${rate.toFixed(1)} (${percentage.toFixed(2)}%)`;
+  return `1/${rate.toFixed(0)} (${percentage.toFixed(2)}%)`;
 }
 
 function updateMetricValue(elementId, value, suffix = '') {
@@ -1447,6 +1764,12 @@ function updateCounterStats() {
     const index = Number.parseInt(element.dataset.counterStat, 10);
     element.textContent = getProbabilityText(STATE.counters[index].count);
   });
+}
+
+function updateCounterToggleButton() {
+  const button = document.getElementById('counterMinusToggleBtn');
+  button.classList.toggle('active', STATE.counterMinusMode);
+  button.textContent = STATE.counterMinusMode ? 'マイナス切り替え ON' : 'マイナス切り替え';
 }
 
 function updateSessionMetrics() {
@@ -1472,28 +1795,17 @@ function updateSessionMetrics() {
 
 function renderCounters() {
   const counterList = document.getElementById('counterList');
-  counterList.innerHTML = STATE.counters.map((counter, index) => `
-    <div class="counter-row">
-      <div class="counter-top">
-        <button type="button" class="counter-name-btn" data-counter-name="${index}">${counter.name}</button>
-        <input class="input-field numeric counter-number" type="number" inputmode="numeric" min="0" step="1" value="${counter.count}" data-counter-input="${index}">
-        <button type="button" class="counter-step" data-counter-minus="${index}">-</button>
-        <button type="button" class="counter-step" data-counter-plus="${index}">+</button>
-      </div>
-      <div class="counter-stat" data-counter-stat="${index}">${getProbabilityText(counter.count)}</div>
+  counterList.innerHTML = `
+    <div class="counter-strip">
+      ${STATE.counters.map((counter, index) => `
+        <div class="counter-tile">
+          <button type="button" class="counter-tap-btn ${STATE.counterMinusMode ? 'minus-mode' : ''}" data-counter-tap="${index}">${counter.name}</button>
+          <input class="input-field numeric counter-number" type="number" inputmode="numeric" min="0" step="1" value="${counter.count}" data-counter-input="${index}">
+          <div class="counter-stat" data-counter-stat="${index}">${getProbabilityText(counter.count)}</div>
+        </div>
+      `).join('')}
     </div>
-  `).join('');
-
-  counterList.querySelectorAll('[data-counter-name]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const index = Number.parseInt(button.dataset.counterName, 10);
-      const nextName = window.prompt('名前を入力してください', STATE.counters[index].name);
-      if (nextName !== null && nextName.trim()) {
-        STATE.counters[index].name = nextName.trim();
-        renderCounters();
-      }
-    });
-  });
+  `;
 
   counterList.querySelectorAll('[data-counter-input]').forEach((input) => {
     input.addEventListener('input', () => {
@@ -1503,22 +1815,10 @@ function renderCounters() {
     });
   });
 
-  counterList.querySelectorAll('[data-counter-minus]').forEach((button) => {
+  counterList.querySelectorAll('[data-counter-tap]').forEach((button) => {
     button.addEventListener('click', () => {
-      const index = Number.parseInt(button.dataset.counterMinus, 10);
-      STATE.counters[index].count = Math.max(0, STATE.counters[index].count - 1);
-      const input = counterList.querySelector(`[data-counter-input="${index}"]`);
-      if (input) {
-        input.value = STATE.counters[index].count;
-      }
-      updateCounterStats();
-    });
-  });
-
-  counterList.querySelectorAll('[data-counter-plus]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const index = Number.parseInt(button.dataset.counterPlus, 10);
-      STATE.counters[index].count += 1;
+      const index = Number.parseInt(button.dataset.counterTap, 10);
+      STATE.counters[index].count = Math.max(0, STATE.counters[index].count + (STATE.counterMinusMode ? -1 : 1));
       const input = counterList.querySelector(`[data-counter-input="${index}"]`);
       if (input) {
         input.value = STATE.counters[index].count;
@@ -1721,6 +2021,20 @@ function bindEvents() {
     renderMachineTab();
   });
 
+  document.getElementById('addMachineBtn').addEventListener('click', () => {
+    resetMachineEditor();
+    setMachineEditorVisibility(true);
+  });
+  document.getElementById('editMachineBtn').addEventListener('click', () => {
+    openMachineEditor(STATE.selectedMachine);
+  });
+  document.getElementById('deleteMachineBtn').addEventListener('click', deleteCurrentMachine);
+  document.getElementById('saveMachineBtn').addEventListener('click', saveMachine);
+  document.getElementById('cancelMachineBtn').addEventListener('click', () => {
+    resetMachineEditor();
+    setMachineEditorVisibility(false);
+  });
+
   document.querySelectorAll('.nav-item').forEach((button) => {
     button.addEventListener('click', () => setActiveTab(button.dataset.tab));
   });
@@ -1732,6 +2046,19 @@ function bindEvents() {
   document.getElementById('shopSelect').addEventListener('change', applyShopPreset);
   document.getElementById('saveShopBtn').addEventListener('click', saveShop);
   document.getElementById('saveLogBtn').addEventListener('click', saveLog);
+  document.getElementById('editCounterNamesBtn').addEventListener('click', () => {
+    renderCounterNameEditor();
+    setCounterNameEditorVisibility(true);
+  });
+  document.getElementById('saveCounterNamesBtn').addEventListener('click', saveCounterNames);
+  document.getElementById('cancelCounterNamesBtn').addEventListener('click', () => {
+    setCounterNameEditorVisibility(false);
+  });
+  document.getElementById('counterMinusToggleBtn').addEventListener('click', () => {
+    STATE.counterMinusMode = !STATE.counterMinusMode;
+    updateCounterToggleButton();
+    renderCounters();
+  });
   document.getElementById('addHitRowBtn').addEventListener('click', () => {
     STATE.hits.push({ g: '', keiki: '', biko: '' });
     renderHits();
@@ -1747,7 +2074,7 @@ function bindEvents() {
   document.getElementById('counterDenominatorGroup').querySelectorAll('input').forEach((radio) => {
     radio.addEventListener('change', () => {
       STATE.counterDenominator = radio.value;
-      renderCounters();
+      updateCounterStats();
     });
   });
 
@@ -1767,11 +2094,13 @@ function init() {
   populateShopSelect();
   renderMachineTab();
   renderCounters();
+  renderCounterNameEditor();
   renderHits();
   renderShopList();
   setSessionDefaults();
   setActiveTab(STATE.activeTab);
   setActiveSubtab(STATE.activeSubtab);
+  updateCounterToggleButton();
   updateSessionMetrics();
   bindEvents();
 }
