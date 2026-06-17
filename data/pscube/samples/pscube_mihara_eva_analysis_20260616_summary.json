@@ -1,0 +1,231 @@
+{
+  "targetCount": 38,
+  "historySuccessCount": 0,
+  "historyFailureCount": 38,
+  "confidenceCounts": {
+    "D": 34,
+    "C-": 2,
+    "A": 2
+  },
+  "rankingEligibleCount": 1,
+  "estimatedDiffBallsCount": 8,
+  "topExpectedHourlyMin": [
+    {
+      "rank": 1,
+      "dai": "0213",
+      "machine": "e新世紀エヴァ17はじまりR",
+      "expectedHourlyMin": -4231,
+      "confidence": "C-",
+      "normalStartsMid": 1922.2,
+      "rotationRateMid": 13.36
+    },
+    {
+      "rank": 2,
+      "dai": "0217",
+      "machine": "e新世紀エヴァ17はじまりR",
+      "expectedHourlyMin": -12038,
+      "confidence": "D",
+      "normalStartsMid": 1790.8,
+      "rotationRateMid": 9.81
+    },
+    {
+      "rank": 3,
+      "dai": "0218",
+      "machine": "e新世紀エヴァ17はじまりR",
+      "expectedHourlyMin": -12241,
+      "confidence": "D",
+      "normalStartsMid": 1357.0,
+      "rotationRateMid": 10.65
+    },
+    {
+      "rank": 4,
+      "dai": "0211",
+      "machine": "e新世紀エヴァ17はじまりR",
+      "expectedHourlyMin": -16152,
+      "confidence": "D",
+      "normalStartsMid": 1687.5,
+      "rotationRateMid": 9.33
+    },
+    {
+      "rank": 5,
+      "dai": "0214",
+      "machine": "e新世紀エヴァ17はじまりR",
+      "expectedHourlyMin": -20061,
+      "confidence": "D",
+      "normalStartsMid": 1026.0,
+      "rotationRateMid": 7.69
+    }
+  ],
+  "topExpectedHourlyMid": [
+    {
+      "rank": 1,
+      "dai": "0213",
+      "machine": "e新世紀エヴァ17はじまりR",
+      "expectedHourlyMid": -3052,
+      "confidence": "C-",
+      "normalStartsMid": 1922.2,
+      "rotationRateMid": 13.36
+    },
+    {
+      "rank": 2,
+      "dai": "0212",
+      "machine": "e新世紀エヴァ17はじまりR",
+      "expectedHourlyMid": -4874,
+      "confidence": "D",
+      "normalStartsMid": 618.6,
+      "rotationRateMid": 11.89
+    },
+    {
+      "rank": 3,
+      "dai": "0216",
+      "machine": "e新世紀エヴァ17はじまりR",
+      "expectedHourlyMid": -6103,
+      "confidence": "D",
+      "normalStartsMid": 598.3,
+      "rotationRateMid": 11.06
+    },
+    {
+      "rank": 4,
+      "dai": "0218",
+      "machine": "e新世紀エヴァ17はじまりR",
+      "expectedHourlyMid": -6787,
+      "confidence": "D",
+      "normalStartsMid": 1357.0,
+      "rotationRateMid": 10.65
+    },
+    {
+      "rank": 5,
+      "dai": "0217",
+      "machine": "e新世紀エヴァ17はじまりR",
+      "expectedHourlyMid": -8370,
+      "confidence": "D",
+      "normalStartsMid": 1790.8,
+      "rotationRateMid": 9.81
+    },
+    {
+      "rank": 6,
+      "dai": "0211",
+      "machine": "e新世紀エヴァ17はじまりR",
+      "expectedHourlyMid": -9402,
+      "confidence": "D",
+      "normalStartsMid": 1687.5,
+      "rotationRateMid": 9.33
+    },
+    {
+      "rank": 7,
+      "dai": "0215",
+      "machine": "e新世紀エヴァ17はじまりR",
+      "expectedHourlyMid": -10009,
+      "confidence": "D",
+      "normalStartsMid": 533.6,
+      "rotationRateMid": 9.07
+    },
+    {
+      "rank": 8,
+      "dai": "0214",
+      "machine": "e新世紀エヴァ17はじまりR",
+      "expectedHourlyMid": -13884,
+      "confidence": "D",
+      "normalStartsMid": 1026.0,
+      "rotationRateMid": 7.69
+    }
+  ],
+  "topEstimatedDiffBalls": [
+    {
+      "rank": 1,
+      "dai": "0215",
+      "machine": "e新世紀エヴァ17はじまりR",
+      "estimatedDiffBalls": 43500,
+      "confidence": "D",
+      "normalStartsMid": 533.6,
+      "rotationRateMid": 9.07
+    },
+    {
+      "rank": 2,
+      "dai": "0216",
+      "machine": "e新世紀エヴァ17はじまりR",
+      "estimatedDiffBalls": 15800,
+      "confidence": "D",
+      "normalStartsMid": 598.3,
+      "rotationRateMid": 11.06
+    },
+    {
+      "rank": 3,
+      "dai": "0212",
+      "machine": "e新世紀エヴァ17はじまりR",
+      "estimatedDiffBalls": 9900,
+      "confidence": "D",
+      "normalStartsMid": 618.6,
+      "rotationRateMid": 11.89
+    },
+    {
+      "rank": 4,
+      "dai": "0218",
+      "machine": "e新世紀エヴァ17はじまりR",
+      "estimatedDiffBalls": -11100,
+      "confidence": "D",
+      "normalStartsMid": 1357.0,
+      "rotationRateMid": 10.65
+    },
+    {
+      "rank": 5,
+      "dai": "0214",
+      "machine": "e新世紀エヴァ17はじまりR",
+      "estimatedDiffBalls": -12600,
+      "confidence": "D",
+      "normalStartsMid": 1026.0,
+      "rotationRateMid": 7.69
+    },
+    {
+      "rank": 6,
+      "dai": "0211",
+      "machine": "e新世紀エヴァ17はじまりR",
+      "estimatedDiffBalls": -14100,
+      "confidence": "D",
+      "normalStartsMid": 1687.5,
+      "rotationRateMid": 9.33
+    },
+    {
+      "rank": 7,
+      "dai": "0217",
+      "machine": "e新世紀エヴァ17はじまりR",
+      "estimatedDiffBalls": -19700,
+      "confidence": "D",
+      "normalStartsMid": 1790.8,
+      "rotationRateMid": 9.81
+    },
+    {
+      "rank": 8,
+      "dai": "0213",
+      "machine": "e新世紀エヴァ17はじまりR",
+      "estimatedDiffBalls": -25600,
+      "confidence": "C-",
+      "normalStartsMid": 1922.2,
+      "rotationRateMid": 13.36
+    }
+  ],
+  "normalStartsTotal": {
+    "min": 21914.0,
+    "mid": 34256.3,
+    "max": 46598.0
+  },
+  "byMachine": {
+    "P新世エヴァ15未来への咆哮": {
+      "count": 18,
+      "avgRotationRateMid": "",
+      "avgExpectedHourlyMid": ""
+    },
+    "e新世紀エヴァ17はじまりR": {
+      "count": 20,
+      "avgRotationRateMid": 10.36,
+      "avgExpectedHourlyMid": -7810
+    }
+  },
+  "appaFormulaReuse": {
+    "status": "partial_reuse",
+    "note": "appa masters loaded; reused エヴァ / エヴァ17 hatsua, heikin, heiren, total, jikan, total1R",
+    "formula": "border=hatsua/(heikin*heiren/250); expectedHourly=(heikin*jikan/total - 250*jikan/rotationRate)*(100/kokan)",
+    "limitation": "Appa's exact rotation formula needs used balls from investment/recovery. This batch file estimates used balls from maxPayout/theoretical gross and graph-estimated diff."
+  },
+  "kokan": 28.0
+}
