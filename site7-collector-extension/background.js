@@ -37,6 +37,153 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return true;
 });
 
+// ----- Auto-crawl controller -------------------------------------------------
+// Drives the existing per-page capture across many 台 by navigating the active
+// Site7 tab through each screen URL at a human-like pace. The active tab keeps
+// the user's paid session and (via the DNR rule) the iPad UA, so this is a real
+// browser doing real navigations — no HTTP scraping or anti-bot evasion.
+const SITE7_SCREEN_FILES = { graph: "D2600.do", history: "D2700.do", detail: "D4000.do" };
+let crawlState = null;
+
+function parseDnList(spec) {
+  const out = [];
+  const seen = new Set();
+  for (const token of String(spec || "").split(/[\s,、]+/).filter(Boolean)) {
+    const range = token.match(/^(\d+)\s*[-~〜]\s*(\d+)$/);
+    if (range) {
+      const [start, end] = [Number(range[1]), Number(range[2])].sort((a, b) => a - b);
+      for (let dn = start; dn <= end && dn - start < 1000; dn++) addDn(dn);
+    } else if (/^\d+$/.test(token)) {
+      addDn(Number(token));
+    }
+  }
+  function addDn(dn) { const key = String(dn); if (!seen.has(key)) { seen.add(key); out.push(dn); } }
+  return out;
+}
+
+function buildCrawlUrl(baseUrl, screenFile, dn) {
+  const url = new URL(baseUrl);
+  if (!/[^/]*\.do$/i.test(url.pathname)) throw new Error("base URL is not a Site7 .do page");
+  url.pathname = url.pathname.replace(/[^/]*\.do$/i, screenFile);
+  url.searchParams.set("dn", String(dn));
+  return url.toString();
+}
+
+function crawlProgress() {
+  if (!crawlState) return { running: false };
+  const done = crawlState.results.length;
+  return {
+    running: crawlState.running,
+    dryRun: crawlState.dryRun,
+    total: crawlState.steps.length,
+    done,
+    index: crawlState.index,
+    current: crawlState.steps[crawlState.index] ? { dn: crawlState.steps[crawlState.index].dn, screen: crawlState.steps[crawlState.index].screen } : null,
+    results: crawlState.results.slice(-60),
+    startedAt: crawlState.startedAt,
+    finishedAt: crawlState.finishedAt || null
+  };
+}
+
+async function getCrawlStatus() { return { ok: true, ...crawlProgress() }; }
+
+async function stopCrawl() {
+  if (crawlState?.running) crawlState.stop = true;
+  return { ok: true, stopping: Boolean(crawlState?.running) };
+}
+
+async function startCrawl(message) {
+  if (crawlState?.running) return { ok: false, error: "巡回はすでに実行中です" };
+  const tabId = Number(message.tabId);
+  if (!Number.isInteger(tabId)) return { ok: false, error: "対象タブが不明です" };
+  const dnList = parseDnList(message.dnSpec);
+  if (!dnList.length) return { ok: false, error: "台番号（dn）が指定されていません" };
+  const screens = (Array.isArray(message.screens) && message.screens.length ? message.screens : ["graph", "history", "detail"])
+    .filter((screen) => SITE7_SCREEN_FILES[screen]);
+  if (!screens.length) return { ok: false, error: "取得する画面が選ばれていません" };
+
+  let steps;
+  try {
+    steps = [];
+    for (const dn of dnList) for (const screen of screens) {
+      steps.push({ dn, screen, url: buildCrawlUrl(message.baseUrl, SITE7_SCREEN_FILES[screen], dn) });
+    }
+  } catch (error) {
+    return { ok: false, error: `${error.message}（対象機種・日付のSite7ページを開いた状態で開始してください）` };
+  }
+
+  const minDelayMs = clamp(Number(message.minDelayMs) || 4000, 1500, 60000);
+  const maxDelayMs = clamp(Number(message.maxDelayMs) || 8000, minDelayMs, 120000);
+  if (message.dryRun) {
+    return { ok: true, dryRun: true, total: steps.length, dnCount: dnList.length,
+      urls: steps.map((step) => ({ dn: step.dn, screen: step.screen, url: step.url })) };
+  }
+
+  crawlState = { running: true, dryRun: false, steps, index: 0, tabId, results: [], stop: false,
+    minDelayMs, maxDelayMs, settleMs: clamp(Number(message.settleMs) || 2000, 500, 15000), startedAt: Date.now(), finishedAt: null };
+  runCrawl();
+  return { ok: true, started: true, total: steps.length, dnCount: dnList.length };
+}
+
+async function runCrawl() {
+  // Strip manual overrides so each 台 is auto-detected; a fixed manual 台番号 or
+  // 差玉 would otherwise be written onto every machine in the crawl.
+  const stored = (await getSettings()).settings;
+  const settings = { ...stored, enabled: true, manualStoreName: "", manualMachineName: "", manualDai: "", manualBusinessDate: "", manualDiffBalls: "" };
+  for (; crawlState.index < crawlState.steps.length; crawlState.index++) {
+    if (crawlState.stop) break;
+    const step = crawlState.steps[crawlState.index];
+    try {
+      await chrome.tabs.update(crawlState.tabId, { url: step.url, active: true });
+      await waitForTabComplete(crawlState.tabId);
+      await delay(crawlState.settleMs);
+      const response = await captureViaContentScript(crawlState.tabId, settings);
+      const saved = response?.results?.filter((result) => result.status !== "unchanged").length || 0;
+      crawlState.results.push({ dn: step.dn, screen: step.screen, ok: Boolean(response?.ok),
+        status: response?.skipped ? "skipped" : (saved ? "saved" : "unchanged") });
+    } catch (error) {
+      crawlState.results.push({ dn: step.dn, screen: step.screen, ok: false, status: "error", error: error.message });
+    }
+    if (crawlState.index < crawlState.steps.length - 1 && !crawlState.stop) {
+      await delay(randomBetween(crawlState.minDelayMs, crawlState.maxDelayMs));
+    }
+  }
+  crawlState.running = false;
+  crawlState.finishedAt = Date.now();
+}
+
+function waitForTabComplete(tabId, timeoutMs = 30000) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (error) => {
+      if (settled) return;
+      settled = true;
+      chrome.tabs.onUpdated.removeListener(listener);
+      clearTimeout(timer);
+      error ? reject(error) : resolve();
+    };
+    const listener = (id, info) => { if (id === tabId && info.status === "complete") finish(); };
+    const timer = setTimeout(() => finish(new Error("ページ読込がタイムアウトしました")), timeoutMs);
+    chrome.tabs.onUpdated.addListener(listener);
+    chrome.tabs.get(tabId).then((tab) => { if (tab?.status === "complete") finish(); }).catch((error) => finish(error));
+  });
+}
+
+async function captureViaContentScript(tabId, settings, attempts = 6) {
+  let lastError = null;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      const response = await chrome.tabs.sendMessage(tabId, { type: "CAPTURE_PAGE", settings });
+      if (response) return response;
+    } catch (error) { lastError = error; }
+    await delay(700);
+  }
+  throw new Error(`取得スクリプトに接続できません${lastError ? `（${lastError.message}）` : ""}`);
+}
+
+function delay(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+function randomBetween(min, max) { return Math.round(min + Math.random() * (max - min)); }
+
 async function handleMessage(message, sender = null) {
   switch (message?.type) {
     case "SAVE_CAPTURE":
@@ -55,6 +202,12 @@ async function handleMessage(message, sender = null) {
       return exportData(message.format, message.scope);
     case "CLEAR_DATA":
       return deleteCapturedData({ scope: "all" });
+    case "START_CRAWL":
+      return startCrawl(message);
+    case "STOP_CRAWL":
+      return stopCrawl();
+    case "GET_CRAWL_STATUS":
+      return getCrawlStatus();
     default:
       throw new Error("Unknown message type");
   }

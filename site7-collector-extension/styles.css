@@ -35,6 +35,13 @@
 .s7-popup th, .s7-popup td { padding: 6px 5px; border-bottom: 1px solid #edf0f5; text-align: left; white-space: nowrap; }
 .s7-popup .ok { color: var(--s7-green); } .s7-popup .warn { color: var(--s7-yellow); } .s7-popup .bad { color: var(--s7-red); }
 .s7-popup footer { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; margin-top: 12px; }
+.s7-popup .hint { margin: 0 0 8px; color: var(--s7-muted); font-size: 11px; line-height: 1.5; }
+.s7-popup .crawl-delays { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.s7-popup .crawl-delays label { display: grid; grid-template-columns: 92px 1fr; align-items: center; gap: 6px; margin: 0; font-size: 12px; }
+.s7-popup input[type="number"] { padding: 7px 8px; border: 1px solid #cbd3df; border-radius: 6px; }
+.s7-popup .crawl-actions { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 10px; }
+.s7-popup #crawlStatus { min-height: 17px; margin: 8px 0 0; font-size: 12px; }
+.s7-popup .crawl-log { max-height: 130px; overflow: auto; margin-top: 6px; padding: 7px 8px; border-radius: 6px; background: #f4f7fb; color: var(--s7-muted); font: 11px/1.5 ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 #site7-collector-status {
   position: fixed; right: 12px; bottom: 12px; z-index: 2147483646; width: 330px; max-height: 45vh; overflow: auto;
