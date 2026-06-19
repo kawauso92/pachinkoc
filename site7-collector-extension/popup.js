@@ -32,6 +32,85 @@ function bindEvents() {
     $("#pendingOnly").textContent = showPendingOnly ? "すべて表示" : "pendingのみ";
     await refreshRecords();
   });
+  $("#crawlStart").addEventListener("click", startCrawl);
+  $("#crawlStop").addEventListener("click", stopCrawl);
+}
+
+let crawlPoll = null;
+
+function crawlScreens() {
+  return [
+    $("#crawlGraph").checked && "graph",
+    $("#crawlHistory").checked && "history",
+    $("#crawlDetail").checked && "detail"
+  ].filter(Boolean);
+}
+
+async function startCrawl() {
+  const tab = await activeTab();
+  if (!tab?.id || !/^https:\/\/([^/]+\.)?site777\.jp\/.*\.do/i.test(tab.url || "")) {
+    setCrawlStatus("対象機種・日付のSite7ページ（…/D2600.do など）を開いてから開始してください", "bad");
+    return;
+  }
+  const dryRun = $("#crawlDryRun").checked;
+  const message = {
+    type: "START_CRAWL",
+    tabId: tab.id,
+    baseUrl: tab.url,
+    dnSpec: $("#crawlDn").value,
+    screens: crawlScreens(),
+    dryRun,
+    minDelayMs: Number($("#crawlMinDelay").value),
+    maxDelayMs: Number($("#crawlMaxDelay").value)
+  };
+  const response = await chrome.runtime.sendMessage(message);
+  if (!response?.ok) { setCrawlStatus(response?.error || "巡回を開始できませんでした", "bad"); return; }
+  if (response.dryRun) {
+    const sample = response.urls.slice(0, 6).map((item) => `dn${item.dn}/${item.screen}: ${item.url}`).join("\n");
+    setCrawlStatus(`ドライラン: ${response.dnCount}台 × 画面 = ${response.total}ステップ`, "ok");
+    $("#crawlLog").textContent = `${sample}${response.urls.length > 6 ? `\n…他 ${response.urls.length - 6} 件` : ""}`;
+    return;
+  }
+  setCrawlStatus(`巡回開始: ${response.dnCount}台 / ${response.total}ステップ`, "ok");
+  $("#crawlStart").disabled = true;
+  $("#crawlStop").disabled = false;
+  pollCrawl();
+}
+
+async function stopCrawl() {
+  await chrome.runtime.sendMessage({ type: "STOP_CRAWL" });
+  setCrawlStatus("停止を要求しました（現在のステップ完了後に停止）", "warn");
+}
+
+function pollCrawl() {
+  if (crawlPoll) clearInterval(crawlPoll);
+  crawlPoll = setInterval(async () => {
+    const status = await chrome.runtime.sendMessage({ type: "GET_CRAWL_STATUS" });
+    renderCrawl(status);
+    if (!status.running) {
+      clearInterval(crawlPoll);
+      crawlPoll = null;
+      $("#crawlStart").disabled = false;
+      $("#crawlStop").disabled = true;
+      await refreshRecords();
+    }
+  }, 1200);
+}
+
+function renderCrawl(status) {
+  if (!status || status.running === false && !status.total) return;
+  const current = status.current ? `dn${status.current.dn}/${status.current.screen}` : "—";
+  setCrawlStatus(`${status.running ? "巡回中" : "完了"} ${status.done}/${status.total}（現在: ${current}）`, status.running ? "" : "ok");
+  const errors = (status.results || []).filter((result) => !result.ok).length;
+  const log = (status.results || []).slice(-12).reverse()
+    .map((result) => `dn${result.dn}/${result.screen}: ${result.status}${result.error ? `（${result.error}）` : ""}`).join("\n");
+  $("#crawlLog").textContent = `${errors ? `エラー ${errors}件\n` : ""}${log}`;
+}
+
+function setCrawlStatus(text, className = "") {
+  const node = $("#crawlStatus");
+  node.textContent = text;
+  node.className = className;
 }
 
 function applySettings(settings) {
