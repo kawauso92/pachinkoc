@@ -5,11 +5,14 @@ const STORAGE_KEYS = {
   pending: "site7PendingV1",
   settings: "site7SettingsV1",
   session: "site7SessionV1",
-  appaMasters: "site7AppaMastersV1"
+  appaMasters: "site7AppaMastersV1",
+  kishuBreakdowns: "site7KishuBreakdownsV1"
 };
 
 const APPA_MASTERS_URL = "https://script.google.com/macros/s/AKfycbzFtMJ354oeVAeNVTGLckNVXX9I1URLJTrlMTafDNO6UPOf7yo3bnaac_yPKYV8hVv8/exec?action=masters";
 const APPA_MASTERS_TTL_MS = 6 * 60 * 60 * 1000;
+// appb機種一覧シート（出玉内訳 B〜U列: 出玉/R数の最大10ペア）をCSVで直接取得する。
+const APPB_BREAKDOWN_CSV_URL = "https://docs.google.com/spreadsheets/d/1TwWuiMgih5ZKst27bP8TePoacnr85gEORPxF8GDLFfg/export?format=csv&gid=531908353";
 
 const DEFAULT_SETTINGS = {
   enabled: true,
@@ -19,8 +22,25 @@ const DEFAULT_SETTINGS = {
   manualMachineName: "",
   manualDai: "",
   manualBusinessDate: "",
-  manualDiffBalls: ""
+  manualDiffBalls: "",
+  // 自動巡回の入力（popupを閉じても保持する）
+  crawlDn: "",
+  crawlGraph: true,
+  crawlHistory: true,
+  crawlDetail: true,
+  crawlMinDelay: 2000,
+  crawlMaxDelay: 5000,
+  crawlDryRun: false,
+  // 巡回前に指定する機種（appa/appb名）。""=自動取得。指定時は全台に適用。
+  crawlMachine: "",
+  // 推定払出に対する出玉補正(%)。実出玉はスペックより少なめなことが多い。例 -1。
+  payoutAdjustPercent: 0,
+  // 機種ごとの超中小→出玉(玉数)の上書き。{ "エヴァ17": { cho, chu, sho } }
+  payoutMapOverrides: {}
 };
+
+// 混雑ページ検出時のバックオフ設定（負荷制御に行儀よく退避する）。
+const CRAWL_BUSY = { baseMs: 60000, maxMs: 300000, maxRetries: 4 };
 
 chrome.runtime.onInstalled.addListener(async () => {
   const stored = await chrome.storage.local.get(STORAGE_KEYS.settings);
@@ -41,7 +61,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 // Drives the existing per-page capture across many 台 by navigating the active
 // Site7 tab through each screen URL at a human-like pace. The active tab keeps
 // the user's paid session and (via the DNR rule) the iPad UA, so this is a real
-// browser doing real navigations — no HTTP scraping or anti-bot evasion.
+// browser doing real navigations.
 const SITE7_SCREEN_FILES = { graph: "D2600.do", history: "D2700.do", detail: "D4000.do" };
 let crawlState = null;
 
@@ -71,15 +91,16 @@ function buildCrawlUrl(baseUrl, screenFile, dn) {
 
 function crawlProgress() {
   if (!crawlState) return { running: false };
-  const done = crawlState.results.length;
   return {
     running: crawlState.running,
     dryRun: crawlState.dryRun,
     total: crawlState.steps.length,
-    done,
+    done: crawlState.index, // 進行済みステップ数（再試行で水増ししない）
     index: crawlState.index,
     current: crawlState.steps[crawlState.index] ? { dn: crawlState.steps[crawlState.index].dn, screen: crawlState.steps[crawlState.index].screen } : null,
     results: crawlState.results.slice(-60),
+    backoffUntil: crawlState.backoffUntil || null,
+    stoppedReason: crawlState.stoppedReason || null,
     startedAt: crawlState.startedAt,
     finishedAt: crawlState.finishedAt || null
   };
@@ -96,6 +117,11 @@ async function startCrawl(message) {
   if (crawlState?.running) return { ok: false, error: "巡回はすでに実行中です" };
   const tabId = Number(message.tabId);
   if (!Number.isInteger(tabId)) return { ok: false, error: "対象タブが不明です" };
+  // 出玉推移(D2600)ページを雛形に dn/画面ファイルだけ差し替える方式のため、
+  // 他ページ（D2400等）はパラメータ構成が異なり生成URLが壊れる。必ずD2600から開始させる。
+  if (!/D2600\.do/i.test(String(message.baseUrl || ""))) {
+    return { ok: false, error: "出玉推移ページ（D2600.do）から開始してください" };
+  }
   const dnList = parseDnList(message.dnSpec);
   if (!dnList.length) return { ok: false, error: "台番号（dn）が指定されていません" };
   const screens = (Array.isArray(message.screens) && message.screens.length ? message.screens : ["graph", "history", "detail"])
@@ -119,8 +145,10 @@ async function startCrawl(message) {
       urls: steps.map((step) => ({ dn: step.dn, screen: step.screen, url: step.url })) };
   }
 
+  const forceMachine = (await getSettings()).settings.crawlMachine || "";
   crawlState = { running: true, dryRun: false, steps, index: 0, tabId, results: [], stop: false,
-    minDelayMs, maxDelayMs, settleMs: clamp(Number(message.settleMs) || 2000, 500, 15000), startedAt: Date.now(), finishedAt: null };
+    minDelayMs, maxDelayMs, settleMs: clamp(Number(message.settleMs) || 2000, 500, 15000),
+    forceMachine, backoffUntil: null, stoppedReason: null, startedAt: Date.now(), finishedAt: null };
   runCrawl();
   return { ok: true, started: true, total: steps.length, dnCount: dnList.length };
 }
@@ -130,26 +158,62 @@ async function runCrawl() {
   // 差玉 would otherwise be written onto every machine in the crawl.
   const stored = (await getSettings()).settings;
   const settings = { ...stored, enabled: true, manualStoreName: "", manualMachineName: "", manualDai: "", manualBusinessDate: "", manualDiffBalls: "" };
-  for (; crawlState.index < crawlState.steps.length; crawlState.index++) {
-    if (crawlState.stop) break;
+  let consecutiveBusy = 0;
+  while (crawlState.index < crawlState.steps.length && !crawlState.stop) {
     const step = crawlState.steps[crawlState.index];
+    let busy = false;
     try {
       await chrome.tabs.update(crawlState.tabId, { url: step.url, active: true });
       await waitForTabComplete(crawlState.tabId);
-      await delay(crawlState.settleMs);
+      if (crawlState.stop) break;
+      await interruptibleDelay(crawlState.settleMs);
+      if (crawlState.stop) break;
       const response = await captureViaContentScript(crawlState.tabId, settings);
-      const saved = response?.results?.filter((result) => result.status !== "unchanged").length || 0;
-      crawlState.results.push({ dn: step.dn, screen: step.screen, ok: Boolean(response?.ok),
-        status: response?.skipped ? "skipped" : (saved ? "saved" : "unchanged") });
+      busy = Boolean(response?.busy);
+      if (busy) {
+        crawlState.results.push({ dn: step.dn, screen: step.screen, ok: false, status: "busy" });
+      } else {
+        const saved = response?.results?.filter((result) => result.status !== "unchanged").length || 0;
+        crawlState.results.push({ dn: step.dn, screen: step.screen, ok: Boolean(response?.ok),
+          status: response?.skipped ? "skipped" : (saved ? "saved" : "unchanged") });
+      }
     } catch (error) {
       crawlState.results.push({ dn: step.dn, screen: step.screen, ok: false, status: "error", error: error.message });
     }
-    if (crawlState.index < crawlState.steps.length - 1 && !crawlState.stop) {
-      await delay(randomBetween(crawlState.minDelayMs, crawlState.maxDelayMs));
+
+    if (busy) {
+      // 混雑検出：同じ台を進めず、指数バックオフで待ってから再試行する。
+      // 連続で上限に達したら、叩き続けず巡回を停止する。
+      consecutiveBusy += 1;
+      if (consecutiveBusy >= CRAWL_BUSY.maxRetries) { crawlState.stoppedReason = "busy_limit"; break; }
+      const backoff = Math.min(CRAWL_BUSY.baseMs * 2 ** (consecutiveBusy - 1), CRAWL_BUSY.maxMs);
+      crawlState.backoffUntil = Date.now() + backoff;
+      await interruptibleDelay(backoff);
+      crawlState.backoffUntil = null;
+      continue; // index を進めず同じステップを再試行
+    }
+
+    consecutiveBusy = 0;
+    crawlState.index += 1;
+    if (crawlState.index < crawlState.steps.length && !crawlState.stop) {
+      await interruptibleDelay(randomBetween(crawlState.minDelayMs, crawlState.maxDelayMs));
     }
   }
   crawlState.running = false;
+  crawlState.backoffUntil = null;
   crawlState.finishedAt = Date.now();
+}
+
+// 停止フラグを監視し、待機中でも停止ボタンに即応できる中断可能な遅延。
+function interruptibleDelay(ms) {
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const tick = () => {
+      if (!crawlState || crawlState.stop || Date.now() - start >= ms) { resolve(); return; }
+      setTimeout(tick, 250);
+    };
+    tick();
+  });
 }
 
 function waitForTabComplete(tabId, timeoutMs = 30000) {
@@ -199,7 +263,9 @@ async function handleMessage(message, sender = null) {
     case "SET_SETTINGS":
       return setSettings(message.settings || {});
     case "EXPORT_DATA":
-      return exportData(message.format, message.scope);
+      return exportData(message.format, message.scope, { businessDate: message.businessDate, machineKey: message.machineKey });
+    case "GET_MASTERS":
+      return getMachineOptions();
     case "CLEAR_DATA":
       return deleteCapturedData({ scope: "all" });
     case "START_CRAWL":
@@ -542,13 +608,16 @@ async function setSettings(patch) {
 async function getData() {
   const session = await ensureSession();
   const masters = await getAppaMasters().catch(() => null);
+  const breakdowns = await getKishuBreakdowns().catch(() => null);
+  const settings = (await getSettings()).settings;
+  const payoutConfig = { adjustPercent: Number(settings.payoutAdjustPercent) || 0, overrides: settings.payoutMapOverrides || {} };
   const stored = await chrome.storage.local.get([STORAGE_KEYS.records, STORAGE_KEYS.pending]);
   const records = Object.values(stored[STORAGE_KEYS.records] || {})
-    .map((record) => applyMasterData(structuredClone(record), masters))
+    .map((record) => applyMasterData(structuredClone(record), masters, breakdowns, payoutConfig))
     .sort(sortRecords);
   const rawPending = stored[STORAGE_KEYS.pending] || [];
   const dedupedPending = dedupePending(rawPending);
-  const pending = dedupedPending.map((record) => applyMasterData(structuredClone(record), masters)).sort(sortRecords);
+  const pending = dedupedPending.map((record) => applyMasterData(structuredClone(record), masters, breakdowns, payoutConfig)).sort(sortRecords);
   if (dedupedPending.length !== rawPending.length) await chrome.storage.local.set({ [STORAGE_KEYS.pending]: dedupedPending });
   const all = [...records, ...pending];
   const sessionRecords = all.filter((record) => isInSession(record, session.startedAt));
@@ -575,6 +644,71 @@ async function getAppaMasters(forceRefresh = false) {
     if (cached?.data) return cached.data;
     throw error;
   }
+}
+
+// appbシートの1行をCSVパース（このシートはセル内にカンマ・引用符を含まない前提の簡易版）。
+function parseCsvLine(line) {
+  return line.split(",");
+}
+
+// appb機種一覧から「機種名 → 出玉内訳[{balls,rounds}]」を作る。
+// B〜U列（index 1〜20）が (出玉, R数) の最大10ペア。出玉が正のペアのみ採用。
+function parseKishuBreakdownCsv(text) {
+  const lines = String(text || "").split(/\r?\n/).filter((line) => line.length);
+  const map = {};
+  for (const line of lines.slice(1)) { // 先頭はヘッダ
+    const cells = parseCsvLine(line);
+    const name = (cells[0] || "").trim();
+    if (!name || name === "試し打ち") continue;
+    const breakdown = [];
+    for (let i = 1; i <= 19; i += 2) {
+      const balls = Number(cells[i]);
+      const rounds = Number(cells[i + 1]);
+      if (Number.isFinite(balls) && balls > 0) breakdown.push({ balls, rounds: Number.isFinite(rounds) ? rounds : null });
+    }
+    if (breakdown.length) map[name] = breakdown;
+  }
+  return map;
+}
+
+// popup向け: 機種名一覧（試し打ち除く）＋各機種の出玉内訳＋超中小の自動マッピング。
+async function getMachineOptions() {
+  const masters = await getAppaMasters().catch(() => null);
+  const breakdowns = await getKishuBreakdowns().catch(() => null);
+  const names = (masters?.kishus || []).map((item) => item.name).filter((name) => name && name !== "試し打ち");
+  const machines = names.map((name) => {
+    const breakdown = breakdowns?.[name] || [];
+    return { name, breakdown, auto: autoMapHitPayout(breakdown) };
+  });
+  return { ok: true, machines };
+}
+
+async function getKishuBreakdowns(forceRefresh = false) {
+  const stored = await chrome.storage.local.get(STORAGE_KEYS.kishuBreakdowns);
+  const cached = stored[STORAGE_KEYS.kishuBreakdowns];
+  const cachedAt = Date.parse(cached?.fetchedAt || "");
+  if (!forceRefresh && cached?.data && Number.isFinite(cachedAt) && Date.now() - cachedAt < APPA_MASTERS_TTL_MS) return cached.data;
+  try {
+    const response = await fetch(APPB_BREAKDOWN_CSV_URL, { redirect: "follow", cache: "no-store" });
+    if (!response.ok) throw new Error(`appb breakdown HTTP ${response.status}`);
+    const data = parseKishuBreakdownCsv(await response.text());
+    await chrome.storage.local.set({ [STORAGE_KEYS.kishuBreakdowns]: { fetchedAt: new Date().toISOString(), data } });
+    return data;
+  } catch (error) {
+    if (cached?.data) return cached.data;
+    throw error;
+  }
+}
+
+// 出玉内訳から 超(最大出玉)/中(中間)/小(最小) の代表出玉を自動マッピングする。
+// 4種以上は超中小に収まらないので推定対象外として null を返す。
+function autoMapHitPayout(breakdown) {
+  if (!Array.isArray(breakdown) || !breakdown.length) return null;
+  if (breakdown.length > 3) return { tooMany: true, cho: null, chu: null, sho: null };
+  const sorted = [...breakdown].sort((a, b) => a.balls - b.balls);
+  if (sorted.length === 1) return { cho: sorted[0].balls, chu: null, sho: null };
+  if (sorted.length === 2) return { cho: sorted[1].balls, chu: null, sho: sorted[0].balls };
+  return { cho: sorted[2].balls, chu: sorted[1].balls, sho: sorted[0].balls };
 }
 
 async function ensureSession() {
@@ -682,7 +816,8 @@ function normalizeIdentityText(value) {
 
 function isForbiddenMachineName(value, storeName = "") {
   const normalized = normalizeIdentityText(value);
-  const forbidden = ["閲覧履歴", "出玉情報", "出玉推移", "大当り履歴", "大当たり履歴", "出玉詳細", "運日データ", "大当り一覧", "大当たり一覧", "出玉推移一覧", "マイページ", "メニュー", "HYPER ARROW美原店"]
+  const forbidden = ["閲覧履歴", "出玉情報", "出玉推移", "大当り履歴", "大当たり履歴", "出玉詳細", "運日データ", "連日データ", "大当り一覧", "大当たり一覧", "出玉推移一覧", "マイページ", "メニュー", "HYPER ARROW美原店",
+    "名無しさん", "名無し", "匿名", "ゲスト", "マイリスト", "マイメモリー", "マイリストに追加", "マイメモリーに追加", "設置機種", "全体を見る", "前の台", "次の台"]
     .map(normalizeIdentityText);
   return !normalized || forbidden.includes(normalized) || normalized === normalizeIdentityText(storeName);
 }
@@ -698,6 +833,11 @@ function prepareIncomingRecord(existing, incoming) {
 
 async function saveCapture(incoming) {
   if (!incoming || typeof incoming !== "object") throw new Error("Capture data is missing");
+  // 巡回で機種を指定している場合は、全台をその機種名(appa/appb名)で固定する。
+  // これで表記ゆれ店でもスペック・内訳が確実に解決する。
+  if (crawlState?.running && crawlState.forceMachine) {
+    incoming = { ...incoming, machineName: crawlState.forceMachine };
+  }
   await ensureSession();
 
   const stored = await chrome.storage.local.get([STORAGE_KEYS.records, STORAGE_KEYS.pending]);
@@ -922,6 +1062,23 @@ function applyCalculations(record) {
     history.payoutExcludedRows = recomputed.payoutExcludedRows;
   }
   const payoutTotal = history?.payoutTotal;
+  const summary = record.parts?.summary || {};
+  // 払出が取れない店向け: 超中小の回数 × 内訳出玉(自動/上書き) × 補正% から払出を推定する。
+  // 実測payoutがある台は推定しない（実測優先）。4種以上(tooMany)は推定対象外。
+  const hitMap = record.calculationInputs?.hitPayoutMap || record.parts?.calculation?.inputs?.hitPayoutMap;
+  let estimatedPayoutTotal = null;
+  if (!isFiniteNumber(payoutTotal) && hitMap && !hitMap.tooMany) {
+    const counts = [summary.choCount, summary.chuCount, summary.shoCount];
+    if (counts.some(isFiniteNumber)) {
+      const adjust = 1 + (Number(record.calculationInputs?.payoutAdjustPercent) || 0) / 100;
+      const sum = (Number(summary.choCount) || 0) * (Number(hitMap.cho) || 0)
+        + (Number(summary.chuCount) || 0) * (Number(hitMap.chu) || 0)
+        + (Number(summary.shoCount) || 0) * (Number(hitMap.sho) || 0);
+      estimatedPayoutTotal = Math.round(sum * adjust);
+    }
+  }
+  const effectivePayout = isFiniteNumber(payoutTotal) ? payoutTotal : estimatedPayoutTotal;
+  const payoutEstimated = !isFiniteNumber(payoutTotal) && isFiniteNumber(estimatedPayoutTotal);
   const graph = record.parts?.graph || {};
   const diffBallsFinal = graph.diffBallsFinal;
   const jackpot = record.parts?.summary?.jackpot;
@@ -933,13 +1090,20 @@ function applyCalculations(record) {
   const historyMismatch = history?.status === "captured" && isFiniteNumber(jackpot) && historyHitCount !== jackpot;
   const calculation = { ...(record.parts?.calculation || {}) };
   const reasons = [];
+  const assumptionsPre = [];
+  // 稼働0（総回転0）は未稼働として扱う。
+  const idle = isFiniteNumber(summary.totalStarts) ? summary.totalStarts === 0
+    : (isFiniteNumber(normalStarts) && normalStarts === 0 && !isFiniteNumber(diffBallsFinal));
+  calculation.idle = idle;
   if (!isFiniteNumber(normalStarts)) reasons.push("normalStartsMissing");
-  if (!isFiniteNumber(payoutTotal)) reasons.push("payoutTotalMissing");
+  if (!isFiniteNumber(effectivePayout)) reasons.push("payoutTotalMissing");
   if (!isFiniteNumber(diffBallsFinal)) reasons.push("diffBallsMissing");
   if (historyMismatch) reasons.push(`historyHitCountMismatch(summary=${jackpot},history=${historyHitCount})`);
+  if (payoutEstimated) assumptionsPre.push("rotationRateEstimated");
+  calculation.rotationRateEstimated = payoutEstimated;
 
   if (!reasons.length) {
-    const estimatedUsedBalls = payoutTotal - diffBallsFinal;
+    const estimatedUsedBalls = effectivePayout - diffBallsFinal;
     calculation.estimatedUsedBalls = estimatedUsedBalls;
     calculation.rotationRate = estimatedUsedBalls > 0 ? Math.round((normalStarts / estimatedUsedBalls * 250) * 100) / 100 : null;
     if (estimatedUsedBalls <= 0) reasons.push("estimatedUsedBallsInvalid");
@@ -952,7 +1116,8 @@ function applyCalculations(record) {
   calculation.expectedHourly = null;
   calculation.workValue = null;
   calculation.expectedValue = null;
-  calculation.assumptions = [];
+  calculation.assumptions = [...assumptionsPre];
+  if (idle) calculation.assumptions.push("idle");
   applyAppaCalculations(record, calculation, reasons, calculation.assumptions);
   calculation.calculationStatus = [...new Set([...reasons, ...calculation.assumptions])];
   calculation.status = calculation.expectedHourly !== null && calculation.workValue !== null
@@ -1024,12 +1189,27 @@ function applyAppaCalculations(record, calculation, reasons, assumptions) {
   calculation.workValueMethod = "appa_hit_round_adjusted_exact";
 }
 
-function applyMasterData(record, masters) {
+function applyMasterData(record, masters, breakdowns = null, payoutConfig = {}) {
   if (!record) return record;
-  if (!masters) return applyCalculations(record);
-  const machineSpec = findMachineSpec(record.machineName, masters.kishus || []);
-  const shop = findShopRate(record.storeName, masters.shops || []);
+  const machineSpec = masters ? findMachineSpec(record.machineName, masters.kishus || []) : null;
+  const shop = masters ? findShopRate(record.storeName, masters.shops || []) : null;
   const previousInputs = record.calculationInputs || record.parts?.calculation?.inputs || {};
+  // 出玉内訳(超中小→出玉)マッピング。解決後のappa名、無ければ既にappa名で入っているmachineNameで引く。
+  const breakdownKey = machineSpec?.name || record.machineName;
+  let hitPayoutMap = null;
+  if (breakdowns && breakdownKey) {
+    const auto = autoMapHitPayout(breakdowns[breakdownKey]);
+    const override = payoutConfig?.overrides?.[breakdownKey];
+    if (auto?.tooMany) {
+      hitPayoutMap = { tooMany: true };
+    } else if (auto) {
+      hitPayoutMap = override ? {
+        cho: isFiniteNumber(Number(override.cho)) ? Number(override.cho) : auto.cho,
+        chu: isFiniteNumber(Number(override.chu)) ? Number(override.chu) : auto.chu,
+        sho: isFiniteNumber(Number(override.sho)) ? Number(override.sho) : auto.sho
+      } : auto;
+    }
+  }
   const inputs = {
     ...previousInputs,
     machineSpec: previousInputs.machineSpec || machineSpec?.spec || null,
@@ -1038,6 +1218,8 @@ function applyMasterData(record, masters) {
     holdingRatioSource: previousInputs.holdingRatioSource || "appa_default_100",
     machineMasterName: previousInputs.machineMasterName || machineSpec?.name || null,
     shopMasterName: previousInputs.shopMasterName || shop?.name || null,
+    hitPayoutMap: hitPayoutMap || previousInputs.hitPayoutMap || null,
+    payoutAdjustPercent: Number(payoutConfig?.adjustPercent) || 0,
     mastersSource: APPA_MASTERS_URL
   };
   record.calculationInputs = inputs;
@@ -1049,11 +1231,42 @@ function normalizeMasterText(value) {
   return String(value || "").normalize("NFKC").toLowerCase().replace(/[~〜～・･\s_\-]/g, "").replace(/^(?:e|p)+(?=[^a-z])/i, "");
 }
 
+// Site7の正式名（長い）→ appa/appbの省略機種名の対応表。
+// 正規化したSite7名に test がマッチしたら、その appa名(name)を採用する。
+// block:true は「別機種に誤マッチしやすいので未解決(=計算エラー)にする」指定。
+// ※順序が重要：先に来たルールが優先。ブロック/限定ルールを汎用ルールより前に置く。
+const MACHINE_ALIAS_RULES = [
+  // --- 別機種への誤マッチ防止（誤った数値より計算エラーを優先）---
+  { test: /大海.*(?:ブラック)?lt/, block: true },        // 大海LT系は通常海と別スペック
+  { test: /東京喰種.*(?:超デカ|超一撃)/, block: true },   // 超デカver.は通常東京喰種と別機種
+  { test: /傾奇一転/, block: true },                      // appa「慶次」=黄金の一撃。傾奇一転は別機種→エラー
+  // --- Re:ゼロ：appaの別機種「異世界」への誤マッチを防ぎつつ判別 ---
+  { test: /(?:リゼロ|re:?ゼロ).*249|リゼロ249/, name: "リゼロ249" },
+  { test: /(?:リゼロ|re:?ゼロ).*199|リゼロ199/, name: "リゼロ 199" },
+  { test: /(?:リゼロ|re:?ゼロ).*m13/, name: "リゼロ 2" },  // season2 M13 → リゼロ2（強欲の可能性あり・要確認）
+  { test: /リゼロ|re:?ゼロ/, block: true },               // 上記以外のRe:ゼロ(129ver等)は曖昧→エラー
+  // --- 確実な別名（省略名が部分一致で拾えないもの）---
+  { test: /はじまりの記憶|エヴァ(?:ンゲリオン)?17/, name: "エヴァ17" },
+  { test: /未来への咆哮|エヴァ(?:ンゲリオン)?15/, name: "エヴァ" },
+  { test: /新世紀エヴァンゲリオン|エヴァンゲリオン/, name: "エヴァ" },
+  { test: /東京喰種|東京グール/, name: "東京グール" },
+  { test: /沖縄6|沖海6/, name: "沖海6" },
+  { test: /大海物語5|大海5/, name: "大海5" },
+  { test: /大海物語4|大海4/, name: "大海4" },
+  { test: /転生したらスライム|転スラ/, name: "転スラ" },
+  { test: /リコリス|リコイル|リコリコ/, name: "リコリコ" },
+  { test: /東京リベンジャー|東リべ/, name: "東リべ" },
+  { test: /まどか.?マギカ3|まどマギ3/, name: "まどマギ3" },
+  { test: /北斗無双.*夢幻|北斗無双5夢幻/, name: "北斗無双5夢幻" },
+  { test: /海物語.*極|極japan|海極/, name: "海極" }
+];
+
 function findMachineSpec(machineName, kishus) {
   const normalized = normalizeMasterText(machineName);
   if (!normalized) return null;
-  const aliasName = /はじまりの記憶|エヴァ(?:ンゲリオン)?17/.test(normalized) ? "エヴァ17" :
-    (/新世紀エヴァンゲリオン|エヴァンゲリオン/.test(normalized) ? "エヴァ" : null);
+  const matchedRule = MACHINE_ALIAS_RULES.find((rule) => rule.test.test(normalized));
+  if (matchedRule?.block) return null; // 別機種誤マッチ防止：未解決→計算エラーで告知
+  const aliasName = matchedRule?.name || null;
   let row = aliasName ? kishus.find((item) => item.name === aliasName) : null;
   if (!row) row = kishus.find((item) => normalizeMasterText(item.name) === normalized);
   if (!row) {
@@ -1084,18 +1297,31 @@ function isFiniteNumber(value) {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-async function exportData(format, scope = "all") {
+// レコードのマスター解決後の機種名（appa名）。未解決は「未解決」グループにまとめる。
+function resolvedMachineName(record) {
+  return record.calculationInputs?.machineMasterName
+    || record.parts?.calculation?.inputs?.machineMasterName
+    || "未解決";
+}
+
+async function exportData(format, scope = "all", filter = {}) {
   const { records, pending } = await getData();
   const session = await ensureSession();
-  const allRecords = [...records, ...pending];
-  const selectedRecords = scope === "session" ? allRecords.filter((record) => isInSession(record, session.startedAt)) : allRecords;
+  // scope（all/session）に加えて、日付・機種（解決後名）でも絞り込む。
+  const matches = (record) => {
+    if (scope === "session" && !isInSession(record, session.startedAt)) return false;
+    if (filter.businessDate && record.businessDate !== filter.businessDate) return false;
+    if (filter.machineKey && resolvedMachineName(record) !== filter.machineKey) return false;
+    return true;
+  };
+  const selectedRecords = [...records, ...pending].filter(matches);
   let content;
   let mime;
   let extension;
   if (format === "json") {
-    const selectedRecordsOnly = scope === "session" ? records.filter((record) => isInSession(record, session.startedAt)) : records;
-    const selectedPendingOnly = scope === "session" ? pending.filter((record) => isInSession(record, session.startedAt)) : pending;
-    content = JSON.stringify({ exportedAt: new Date().toISOString(), scope, sessionStartedAt: session.startedAt, records: selectedRecordsOnly, pending: selectedPendingOnly }, null, 2);
+    const selectedRecordsOnly = records.filter(matches);
+    const selectedPendingOnly = pending.filter(matches);
+    content = JSON.stringify({ exportedAt: new Date().toISOString(), scope, filter, sessionStartedAt: session.startedAt, records: selectedRecordsOnly, pending: selectedPendingOnly }, null, 2);
     mime = "application/json";
     extension = "json";
   } else if (format === "csv") {
@@ -1117,9 +1343,11 @@ async function exportData(format, scope = "all") {
   }
   const url = `data:${mime};base64,${btoa(binary)}`;
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const sanitize = (value) => String(value).replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 24);
+  const filterTag = [filter.businessDate ? sanitize(filter.businessDate) : "", filter.machineKey ? sanitize(filter.machineKey) : ""].filter(Boolean).join("-");
   const downloadId = await chrome.downloads.download({
     url,
-    filename: `site7-collector-${format === "debugCsv" ? "debug" : format}-${scope}-${stamp}.${extension}`,
+    filename: `site7-collector-${format === "debugCsv" ? "debug" : format}-${scope}${filterTag ? `-${filterTag}` : ""}-${stamp}.${extension}`,
     saveAs: true
   });
   let archivedAt = null;
@@ -1144,7 +1372,8 @@ const DEBUG_CSV_COLUMNS = [
 const SPREADSHEET_CSV_COLUMNS = [
   ["日付", "businessDate"], ["店舗", "storeName"], ["機種", "machineName"], ["台番", "daiNormalized"],
   ["期待時給", "expectedHourly"], ["仕事量", "workValue"], ["総回転", "totalStarts"], ["通常回転", "normalStarts"],
-  ["回転率", "rotationRate"], ["総当り", "jackpot"], ["初当り", "initialHits"], ["獲得数合計", "payoutTotal"],
+  ["回転率", "rotationRate"], ["総当り", "jackpot"], ["初当り", "initialHits"],
+  ["超", "choCount"], ["中", "chuCount"], ["小", "shoCount"], ["獲得数合計", "payoutTotal"],
   ["最終差玉", "diffBallsFinal"], ["推定使用玉", "estimatedUsedBalls"], ["最高出玉", "highestPayout"],
   ["最終スタート", "finalStarts"], ["取得状態", "captureStatus"], ["メモ", "notes"]
 ];
@@ -1156,6 +1385,8 @@ function flattenRecord(record, spreadsheet = false) {
   const calculation = record.parts?.calculation || {};
   const calculationInputs = calculation.inputs || record.calculationInputs || {};
   const notes = [...(record.notes || [])];
+  if (calculation.idle) notes.push("未稼働");
+  if (calculation.rotationRateEstimated) notes.push("回転率は推定値(精度低・超中小×内訳出玉)");
   if (calculation.calculationStatus?.length) notes.push(`calculationStatus: ${calculation.calculationStatus.join("|")}`);
   if (graph.status === "captured" && !Number.isFinite(graph.diffBallsFinal)) {
     notes.push(`diffBallsStatus: ${graph.diffBallsStatus || "missing"}`);
@@ -1177,6 +1408,9 @@ function flattenRecord(record, spreadsheet = false) {
     chanceStarts: summary.chanceStarts,
     highestPayout: summary.highestPayout,
     finalStarts: summary.finalStarts,
+    choCount: summary.choCount,
+    chuCount: summary.chuCount,
+    shoCount: summary.shoCount,
     historyRowCount: history.rows?.length || 0,
     payoutTotal: Number.isFinite(history.payoutTotal) ? history.payoutTotal : (history.rows || [])
       .filter((item) => Number.isInteger(item.no) && item.no >= 1 && typeof item.payout === "number" && Number.isFinite(item.payout))

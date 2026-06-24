@@ -22,8 +22,13 @@
     updateTime: ["更新時間", "更新時刻", "最終更新"]
   };
   const FORBIDDEN_MACHINE_NAMES = new Set([
-    "閲覧履歴", "出玉情報", "出玉推移", "大当り履歴", "大当たり履歴", "出玉詳細", "運日データ",
-    "大当り一覧", "大当たり一覧", "出玉推移一覧", "マイページ", "メニュー", "HYPER ARROW美原店"
+    "閲覧履歴", "出玉情報", "出玉推移", "大当り履歴", "大当たり履歴", "出玉詳細", "運日データ", "連日データ",
+    "大当り一覧", "大当たり一覧", "出玉推移一覧", "マイページ", "メニュー", "HYPER ARROW美原店",
+    // コメント欄等の匿名ハンドルを機種名として誤検出しない
+    "名無しさん", "名無し", "匿名", "ゲスト",
+    // ページUIのボタン・ラベルを機種名として誤検出しない
+    "マイリスト", "マイメモリー", "マイリストに追加", "マイメモリーに追加", "設置機種",
+    "全体を見る", "前の台", "次の台"
   ]);
   const SCREEN_LABELS = new Map([
     ["出玉推移", "graph"], ["大当り履歴", "history"], ["大当たり履歴", "history"],
@@ -366,7 +371,7 @@
       !FORBIDDEN_MACHINE_NAMES.has(value) &&
       !sameIdentityText(value, storeName) &&
       !/(?:戻る|トップへ|前の台|次の台|一覧へ)$|^(?:<<|＜＜|戻る|ホーム)/i.test(value) &&
-      !/^(?:Site.?7|サイトセブン|出玉情報|出玉推移|大当り履歴|大当たり履歴|出玉詳細|連日データ|データ|機種情報|HYPER ARROW)/i.test(value) &&
+      !/^(?:Site.?7|サイトセブン|出玉情報|出玉推移|大当り履歴|大当たり履歴|出玉詳細|連日データ|データ|機種情報|HYPER ARROW|名無し|匿名|ゲスト|マイリスト|マイメモリー|設置機種)/i.test(value) &&
       !/^\d{1,2}[\/.-]\d{1,2}$/.test(value));
   }
 
@@ -615,7 +620,21 @@
     return candidates;
   }
 
+  function detectSiteBusy() {
+    // 「現在システムが混み合っております…しばらく待って再度アクセス」等の
+    // 負荷制御ページを検出する。該当時は取得せず、巡回側でバックオフ退避する。
+    const text = clean(document.body?.innerText || document.body?.textContent || "");
+    if (!text) return false;
+    if (/混み合って|アクセスが集中|ただ今(?:大変)?混雑/.test(text)) return true;
+    return /しばらく(?:お待ち|待って|時間をおいて)/.test(text) && /再度|もう一度/.test(text);
+  }
+
   async function captureAndSave(silent) {
+    if (detectSiteBusy()) {
+      // 混雑ページでは取得を行わず、巡回コントローラに退避を促す。
+      if (!silent) showToast("⚠ サイトが混雑しています\n時間を空けて再開してください", "warn");
+      return { ok: true, busy: true, skipped: true, records: [], results: [] };
+    }
     const freshInspection = inspectPage();
     if (!state.currentContext) lockCurrentContext(freshInspection, false);
     else if (state.currentContext.machineName === "unknown" && freshInspection.machineName !== "unknown") {
@@ -780,6 +799,35 @@
     };
   }
 
+  function captureHitBreakdown(root) {
+    // 出玉詳細の「超 中 小」(大当りの出玉内訳)の回数を取得する。
+    // ラベル(超/中/小)の真下にある最も近い数値を幾何的に拾う（レイアウト差に強い）。
+    const result = { choCount: null, chuCount: null, shoCount: null };
+    const keyByLabel = { "超": "choCount", "中": "chuCount", "小": "shoCount" };
+    const labels = [];
+    const numbers = [];
+    for (const el of root.querySelectorAll("div,span,td,th,p,b,strong,li")) {
+      if (el.children.length) continue;
+      const text = clean(el.textContent);
+      if (!isVisible(el)) continue;
+      if (keyByLabel[text]) labels.push({ key: keyByLabel[text], rect: el.getBoundingClientRect() });
+      else if (/^\d{1,4}$/.test(text)) numbers.push({ value: Number(text), rect: el.getBoundingClientRect() });
+    }
+    for (const label of labels) {
+      if (result[label.key] !== null) continue;
+      const lx = label.rect.left + label.rect.width / 2;
+      let best = null;
+      let bestScore = Infinity;
+      for (const num of numbers) {
+        const dx = Math.abs((num.rect.left + num.rect.width / 2) - lx);
+        const dy = num.rect.top - label.rect.top;
+        if (dy > 0 && dy < 120 && dx < 40 && dy + dx < bestScore) { bestScore = dy + dx; best = num; }
+      }
+      if (best) result[label.key] = best.value;
+    }
+    return result;
+  }
+
   function captureSummary(root, capturedAt) {
     const values = {};
     for (const [key, labels] of Object.entries(LABELS)) {
@@ -788,7 +836,7 @@
     }
     const strongKeys = ["jackpot", "initialHits", "totalStarts", "normalStarts", "chanceStarts", "highestPayout"];
     if (!strongKeys.some((key) => values[key] !== null)) return emptyPart("summary");
-    return { status: "captured", capturedAt, ...values };
+    return { status: "captured", capturedAt, ...values, ...captureHitBreakdown(root) };
   }
 
   function captureHistory(root, capturedAt) {

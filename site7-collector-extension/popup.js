@@ -2,27 +2,104 @@
 
 const $ = (selector) => document.querySelector(selector);
 const controls = ["enabled", "autoSave", "soundEnabled", "manualStoreName", "manualMachineName", "manualDai", "manualBusinessDate", "manualDiffBalls"];
+// 自動巡回の入力もpopupを閉じても保持する（settingsへ保存・復元）。
+const crawlControls = ["crawlDn", "crawlGraph", "crawlHistory", "crawlDetail", "crawlMinDelay", "crawlMaxDelay", "crawlDryRun"];
 let lastInspection = null;
 let lastPageDebug = null;
 let showPendingOnly = false;
+let machinesData = [];              // GET_MASTERS の機種一覧（名前+内訳+自動マッピング）
+let payoutOverrides = {};           // 機種ごとの超中小→出玉 上書き { name: {cho,chu,sho} }
 
 document.addEventListener("DOMContentLoaded", initialize);
 
 async function initialize() {
   bindEvents();
   await chrome.runtime.sendMessage({ type: "START_SESSION" });
+  await loadMasters();
   const settingsResponse = await chrome.runtime.sendMessage({ type: "GET_SETTINGS" });
+  payoutOverrides = settingsResponse.settings?.payoutMapOverrides || {};
   applySettings(settingsResponse.settings || {});
-  await Promise.all([refreshPageState(), refreshRecords()]);
+  await Promise.all([refreshPageState(), refreshRecords(), restoreCrawlState()]);
+}
+
+// 機種一覧を取得して機種プルダウンを作る。
+async function loadMasters() {
+  const response = await chrome.runtime.sendMessage({ type: "GET_MASTERS" }).catch(() => null);
+  machinesData = response?.machines || [];
+  const select = $("#crawlMachine");
+  const current = select.value;
+  select.innerHTML = '<option value="">自動取得</option>'
+    + machinesData.map((machine) => `<option value="${escapeHtml(machine.name)}">${escapeHtml(machine.name)}</option>`).join("");
+  select.value = current;
+}
+
+function machineByName(name) {
+  return machinesData.find((machine) => machine.name === name) || null;
+}
+
+// 選択機種の出玉内訳から 超/中/小 のプルダウンを作る。override優先、無ければ自動。
+function populatePayoutSelects(name) {
+  const machine = machineByName(name);
+  const override = payoutOverrides[name] || {};
+  const auto = machine?.auto || {};
+  const note = $("#payoutMapNote");
+  const fill = (select, value) => {
+    if (!machine || !machine.breakdown.length) {
+      select.innerHTML = '<option value="">—</option>';
+      select.value = "";
+      select.disabled = true;
+      return;
+    }
+    select.disabled = false;
+    select.innerHTML = '<option value="">—</option>'
+      + machine.breakdown.map((item) => `<option value="${item.balls}">${item.balls}玉${item.rounds ? `/${item.rounds}R` : ""}</option>`).join("");
+    select.value = value != null && value !== "" ? String(value) : "";
+  };
+  if (auto.tooMany) {
+    note.textContent = "この機種は当り種類が4種以上のため推定対象外です（生データのみ）。";
+    fill($("#payoutCho"), ""); fill($("#payoutChu"), ""); fill($("#payoutSho"), "");
+    $("#payoutCho").disabled = $("#payoutChu").disabled = $("#payoutSho").disabled = true;
+  } else {
+    note.textContent = machine && machine.breakdown.length ? "既定は自動（超=最大/中=中間/小=最小）。必要なら変更してください。" : "";
+    fill($("#payoutCho"), override.cho ?? auto.cho);
+    fill($("#payoutChu"), override.chu ?? auto.chu);
+    fill($("#payoutSho"), override.sho ?? auto.sho);
+  }
+}
+
+// 機種選択が変わったら超中小を作り直して保存。
+function onMachineChange() {
+  populatePayoutSelects($("#crawlMachine").value);
+  saveSettings();
+}
+
+// 超中小プルダウンが変わったら、その機種の上書きを更新して保存。
+function onPayoutMapChange() {
+  const name = $("#crawlMachine").value;
+  if (!name) return;
+  const num = (id) => { const value = $(id).value; return value === "" ? null : Number(value); };
+  payoutOverrides[name] = { cho: num("#payoutCho"), chu: num("#payoutChu"), sho: num("#payoutSho") };
+  saveSettings();
+}
+
+// popupを開き直したとき、巡回が継続中ならUIとポーリングを復帰させる。
+async function restoreCrawlState() {
+  const status = await chrome.runtime.sendMessage({ type: "GET_CRAWL_STATUS" }).catch(() => null);
+  if (status?.running) {
+    $("#crawlStart").disabled = true;
+    $("#crawlStop").disabled = false;
+    renderCrawl(status);
+    pollCrawl();
+  }
 }
 
 function bindEvents() {
-  for (const id of controls) {
-    $("#" + id).addEventListener(id.startsWith("manual") ? "change" : "change", saveSettings);
+  for (const id of [...controls, ...crawlControls]) {
+    $("#" + id).addEventListener("change", saveSettings);
   }
   $("#capture").addEventListener("click", capturePage);
   $("#exportSessionCsv").addEventListener("click", () => exportData("csv", "session"));
-  $("#exportAllCsv").addEventListener("click", () => exportData("csv", "all"));
+  $("#exportFilteredCsv").addEventListener("click", exportFilteredCsv);
   $("#exportDebugCsv").addEventListener("click", () => exportData("debugCsv", "all"));
   $("#exportJson").addEventListener("click", () => exportData("json", "all"));
   $("#copyDebug").addEventListener("click", copyDebug);
@@ -34,6 +111,9 @@ function bindEvents() {
   });
   $("#crawlStart").addEventListener("click", startCrawl);
   $("#crawlStop").addEventListener("click", stopCrawl);
+  $("#crawlMachine").addEventListener("change", onMachineChange);
+  for (const id of ["payoutCho", "payoutChu", "payoutSho"]) $("#" + id).addEventListener("change", onPayoutMapChange);
+  $("#payoutAdjust").addEventListener("change", saveSettings);
 }
 
 let crawlPoll = null;
@@ -48,8 +128,8 @@ function crawlScreens() {
 
 async function startCrawl() {
   const tab = await activeTab();
-  if (!tab?.id || !/^https:\/\/([^/]+\.)?site777\.jp\/.*\.do/i.test(tab.url || "")) {
-    setCrawlStatus("対象機種・日付のSite7ページ（…/D2600.do など）を開いてから開始してください", "bad");
+  if (!tab?.id || !/^https:\/\/([^/]+\.)?site777\.jp\/.*D2600\.do/i.test(tab.url || "")) {
+    setCrawlStatus("出玉推移ページ（…/D2600.do）を開いてから開始してください（他ページはパラメータが異なりエラーになります）", "bad");
     return;
   }
   const dryRun = $("#crawlDryRun").checked;
@@ -100,7 +180,14 @@ function pollCrawl() {
 function renderCrawl(status) {
   if (!status || status.running === false && !status.total) return;
   const current = status.current ? `dn${status.current.dn}/${status.current.screen}` : "—";
-  setCrawlStatus(`${status.running ? "巡回中" : "完了"} ${status.done}/${status.total}（現在: ${current}）`, status.running ? "" : "ok");
+  if (status.running && status.backoffUntil) {
+    const remain = Math.max(0, Math.ceil((status.backoffUntil - Date.now()) / 1000));
+    setCrawlStatus(`混雑のため退避中… あと約${remain}秒で再試行（現在: ${current}）`, "warn");
+  } else if (!status.running && status.stoppedReason === "busy_limit") {
+    setCrawlStatus(`混雑が続いたため停止しました ${status.done}/${status.total}。時間を空けて再開してください`, "bad");
+  } else {
+    setCrawlStatus(`${status.running ? "巡回中" : "完了"} ${status.done}/${status.total}（現在: ${current}）`, status.running ? "" : "ok");
+  }
   const errors = (status.results || []).filter((result) => !result.ok).length;
   const log = (status.results || []).slice(-12).reverse()
     .map((result) => `dn${result.dn}/${result.screen}: ${result.status}${result.error ? `（${result.error}）` : ""}`).join("\n");
@@ -122,6 +209,18 @@ function applySettings(settings) {
   $("#manualDai").value = settings.manualDai || "";
   $("#manualBusinessDate").value = settings.manualBusinessDate || "";
   $("#manualDiffBalls").value = settings.manualDiffBalls ?? "";
+  // 自動巡回入力の復元（未設定なら既定: 3画面ON・遅延8〜20秒）。
+  $("#crawlDn").value = settings.crawlDn || "";
+  $("#crawlGraph").checked = settings.crawlGraph !== false;
+  $("#crawlHistory").checked = settings.crawlHistory !== false;
+  $("#crawlDetail").checked = settings.crawlDetail !== false;
+  $("#crawlMinDelay").value = settings.crawlMinDelay ?? 2000;
+  $("#crawlMaxDelay").value = settings.crawlMaxDelay ?? 5000;
+  $("#crawlDryRun").checked = Boolean(settings.crawlDryRun);
+  // 機種指定・出玉補正・超中小マッピングの復元
+  $("#crawlMachine").value = settings.crawlMachine || "";
+  $("#payoutAdjust").value = settings.payoutAdjustPercent ?? 0;
+  populatePayoutSelects($("#crawlMachine").value);
 }
 
 function collectSettings() {
@@ -133,7 +232,17 @@ function collectSettings() {
     manualMachineName: $("#manualMachineName").value.trim(),
     manualDai: $("#manualDai").value.trim(),
     manualBusinessDate: $("#manualBusinessDate").value,
-    manualDiffBalls: $("#manualDiffBalls").value.trim()
+    manualDiffBalls: $("#manualDiffBalls").value.trim(),
+    crawlDn: $("#crawlDn").value.trim(),
+    crawlGraph: $("#crawlGraph").checked,
+    crawlHistory: $("#crawlHistory").checked,
+    crawlDetail: $("#crawlDetail").checked,
+    crawlMinDelay: Number($("#crawlMinDelay").value) || 2000,
+    crawlMaxDelay: Number($("#crawlMaxDelay").value) || 5000,
+    crawlDryRun: $("#crawlDryRun").checked,
+    crawlMachine: $("#crawlMachine").value,
+    payoutAdjustPercent: Number($("#payoutAdjust").value) || 0,
+    payoutMapOverrides: payoutOverrides
   };
 }
 
@@ -210,6 +319,7 @@ async function capturePage() {
 
 async function refreshRecords() {
   const response = await chrome.runtime.sendMessage({ type: "GET_DATA" });
+  populateExportFilters([...(response.records || []), ...(response.pending || [])]);
   $("#savedCount").textContent = response.counts?.saved ?? 0;
   $("#sessionCount").textContent = response.counts?.session ?? 0;
   $("#completeCount").textContent = response.counts?.complete ?? 0;
@@ -244,9 +354,35 @@ function partMark(part) {
   return part?.status === "captured" ? "✓" : "—";
 }
 
-async function exportData(format, scope) {
+// 日付プルダウン・機種プルダウン（解決後名）の現在値で絞ってCSV出力する。
+function exportFilteredCsv() {
+  exportData("csv", "all", { businessDate: $("#filterDate").value, machineKey: $("#filterMachine").value });
+}
+
+// マスター解決後の機種名（未解決は「未解決」）。popup側でもbackgroundと同じ規則で求める。
+function resolvedMachineName(record) {
+  return record.calculationInputs?.machineMasterName
+    || record.parts?.calculation?.inputs?.machineMasterName
+    || "未解決";
+}
+
+// 保存データから日付・機種の選択肢を作る。選択中の値は保持する。
+function populateExportFilters(allRecords) {
+  const fillSelect = (select, values, currentValue) => {
+    const options = ['<option value="">すべて</option>']
+      .concat(values.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`));
+    select.innerHTML = options.join("");
+    select.value = values.includes(currentValue) ? currentValue : "";
+  };
+  const dates = [...new Set(allRecords.map((record) => record.businessDate).filter(Boolean))].sort().reverse();
+  const machines = [...new Set(allRecords.map(resolvedMachineName))].sort();
+  fillSelect($("#filterDate"), dates, $("#filterDate").value);
+  fillSelect($("#filterMachine"), machines, $("#filterMachine").value);
+}
+
+async function exportData(format, scope, filter = {}) {
   try {
-    const response = await chrome.runtime.sendMessage({ type: "EXPORT_DATA", format, scope });
+    const response = await chrome.runtime.sendMessage({ type: "EXPORT_DATA", format, scope, businessDate: filter.businessDate || "", machineKey: filter.machineKey || "" });
     if (!response.ok) throw new Error(response.error);
     const label = format === "debugCsv" ? "デバッグCSV" : format.toUpperCase();
     setMessage(`${label}を書き出しました（${response.count}件）${response.archivedAt ? "／今回分を過去データへ移しました" : ""}`, "ok");

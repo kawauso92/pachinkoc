@@ -9,6 +9,10 @@ storageState.json
 playwright/.auth/
 *.har
 *.html
+# 拡張機能のHTMLは配布に必須なので除外しない
+!site7-collector-extension/*.html
+# Chromeが未パッケージ読み込み時に生成する不要物
+site7-collector-extension/_metadata/
 *_probe_*.json
 __pycache__/
 *.pyc

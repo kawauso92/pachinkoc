@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<!--
+  popup.html を復元したもの。
+  元リポジトリでは .gitignore の "*.html" によりコミットされていなかったため、
+  popup.js が参照する要素ID と styles.css のクラス定義から再構成しています。
+  レイアウト方針: 自動巡回をメインに最上段、手動系（手動取得・自動保存・手動補正）は下段。
+-->
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Site7 Collector</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="s7-popup">
+  <!-- ヘッダ：タイトルと有効/無効スイッチ -->
+  <header class="popup-header">
+    <div>
+      <h1>Site7 Collector</h1>
+      <p>表示中のサイトセブン台データをローカル保存します</p>
+    </div>
+    <label class="switch"><input type="checkbox" id="enabled">有効</label>
+  </header>
+
+  <!-- 自動巡回（β）：メイン操作 -->
+  <section class="panel">
+    <h2>自動巡回（β）</h2>
+    <p class="hint">
+      対象機種・日付のSite7ページ（…/D2600.do など）を開いた状態で開始します。
+      現在タブのURLを雛形に dn と画面ファイルだけを差し替え、実ブラウザを順に遷移して取得します。
+      巡回中は対象タブを前面のままにしてください。
+    </p>
+    <label>台番号(dn)<input type="text" id="crawlDn" autocomplete="off" placeholder="181-220 または 181,182,190-195"></label>
+    <label>機種<select id="crawlMachine"><option value="">自動取得</option></select></label>
+    <p class="hint">大当り履歴に出玉情報が無い店は、機種を選んで出玉内訳（超/中/小のR）を事前に指定してください。出玉が取れる店は「自動取得」でOK。実測payoutがある台は推定で上書きしません。</p>
+    <div class="crawl-delays">
+      <label>超<select id="payoutCho" disabled><option value="">—</option></select></label>
+      <label>中<select id="payoutChu" disabled><option value="">—</option></select></label>
+      <label>小<select id="payoutSho" disabled><option value="">—</option></select></label>
+      <label>出玉補正(%)<input type="number" id="payoutAdjust" value="0" min="-30" max="30" step="0.5"></label>
+    </div>
+    <p id="payoutMapNote" class="hint"></p>
+    <div class="checks">
+      <label><input type="checkbox" id="crawlGraph" checked>出玉推移</label>
+      <label><input type="checkbox" id="crawlHistory" checked>大当り履歴</label>
+      <label><input type="checkbox" id="crawlDetail" checked>出玉詳細</label>
+    </div>
+    <div class="crawl-delays">
+      <label>最小遅延(ms)<input type="number" id="crawlMinDelay" value="2000" min="1500" max="60000" step="500"></label>
+      <label>最大遅延(ms)<input type="number" id="crawlMaxDelay" value="5000" min="1500" max="120000" step="500"></label>
+    </div>
+    <label class="switch"><input type="checkbox" id="crawlDryRun">ドライラン（生成予定URLだけ確認）</label>
+    <div class="crawl-actions">
+      <button id="crawlStart" class="primary">自動巡回を開始</button>
+      <button id="crawlStop" disabled>停止</button>
+    </div>
+    <p id="crawlStatus"></p>
+    <pre id="crawlLog" class="crawl-log"></pre>
+  </section>
+
+  <!-- 保存データ一覧 -->
+  <section class="panel">
+    <div class="section-title">
+      <h2>保存データ</h2>
+      <button id="pendingOnly" class="subtle">pendingのみ</button>
+    </div>
+    <div class="record-counts">
+      <span>保存<strong id="savedCount">0</strong></span>
+      <span>今回<strong id="sessionCount">0</strong></span>
+      <span>完了<strong id="completeCount">0</strong></span>
+      <span>未完<strong id="incompleteCount">0</strong></span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>台</th>
+            <th>営業日</th>
+            <th>S</th>
+            <th>H</th>
+            <th>G</th>
+            <th>状態</th>
+          </tr>
+        </thead>
+        <tbody id="records"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 現在のページ（手動取得）：検出状態・手動保存・自動保存 -->
+  <section class="panel">
+    <div class="section-title">
+      <h2>現在のページ（手動取得）</h2>
+    </div>
+    <p id="pageSummary" class="hint">サイトセブンのページを開いてください</p>
+    <dl id="currentDetails"></dl>
+    <div class="checks">
+      <label class="switch" title="ONにすると出玉推移以外（大当り履歴・出玉詳細など）もページ遷移時に自動保存します。出玉推移は常に自動保存。自動巡回には影響しません。">
+        <input type="checkbox" id="autoSave">自動保存（他画面も）</label>
+      <label class="switch"><input type="checkbox" id="soundEnabled">通知音</label>
+    </div>
+    <button id="capture" class="primary">現在のページを保存</button>
+    <p id="message"></p>
+  </section>
+
+  <!-- 手動補正（基本的に使わないので最下段付近） -->
+  <section class="panel">
+    <h2>手動補正</h2>
+    <p class="hint">誤検出・未検出のときだけ入力します。空欄なら自動検出値を使用します。</p>
+    <label>店舗名<input type="text" id="manualStoreName" autocomplete="off"></label>
+    <label>機種名<input type="text" id="manualMachineName" autocomplete="off"></label>
+    <label>台番号<input type="text" id="manualDai" autocomplete="off" placeholder="例: 181"></label>
+    <label>対象日<input type="date" id="manualBusinessDate"></label>
+    <label>差玉補正<input type="text" id="manualDiffBalls" autocomplete="off" placeholder="グラフ目視値（任意）"></label>
+  </section>
+
+  <!-- 条件を指定してCSV出力（日付×機種で絞り込み。機種は解決後名でまとめ）-->
+  <section class="panel">
+    <h2>条件を指定してCSV出力</h2>
+    <p class="hint">保存データから日付・機種で絞って出力します。機種はマスター解決後の名前でまとめ（未対応は「未解決」）。</p>
+    <label>日付<select id="filterDate"><option value="">すべて</option></select></label>
+    <label>機種<select id="filterMachine"><option value="">すべて</option></select></label>
+    <button id="exportFilteredCsv" class="primary">この条件でCSV出力</button>
+  </section>
+
+  <!-- 書き出し・管理 -->
+  <footer>
+    <button id="exportSessionCsv">今回データCSV</button>
+    <button id="exportDebugCsv">デバッグCSV</button>
+    <button id="exportJson">JSON（全量バックアップ）</button>
+    <button id="copyDebug">デバッグ情報コピー</button>
+    <button id="clearData" class="danger">全削除</button>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>
