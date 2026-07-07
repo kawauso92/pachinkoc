@@ -22,7 +22,7 @@
     updateTime: ["更新時間", "更新時刻", "最終更新"]
   };
   const FORBIDDEN_MACHINE_NAMES = new Set([
-    "閲覧履歴", "出玉情報", "出玉推移", "大当り履歴", "大当たり履歴", "出玉詳細", "運日データ", "連日データ",
+    "閲覧履歴", "ホールTOP", "店舗TOP", "出玉情報", "出玉推移", "大当り履歴", "大当たり履歴", "出玉詳細", "運日データ", "連日データ",
     "大当り一覧", "大当たり一覧", "出玉推移一覧", "マイページ", "メニュー", "HYPER ARROW美原店",
     // コメント欄等の匿名ハンドルを機種名として誤検出しない
     "名無しさん", "名無し", "匿名", "ゲスト",
@@ -34,6 +34,7 @@
     ["出玉推移", "graph"], ["大当り履歴", "history"], ["大当たり履歴", "history"],
     ["出玉詳細", "detail"], ["運日データ", "summary"]
   ]);
+  const GRAPH_DIFF_RELIABLE_LIMIT = 30000;
 
   boot();
 
@@ -55,6 +56,10 @@
     if (message?.type === "CAPTURE_PAGE") {
       state.settings = { ...state.settings, ...(message.settings || {}) };
       captureAndSave(false).then(sendResponse).catch((error) => sendResponse({ ok: false, error: error.message }));
+      return true;
+    }
+    if (message?.type === "GET_DAI_LIST") {
+      sendResponse({ ok: true, daiList: collectCrawlDaiList(document, parseSite7Url(location.href)) });
       return true;
     }
     if (message?.type === "SET_ENABLED") {
@@ -349,6 +354,14 @@
       else if (blue) add(element.textContent, mdcMatches ? "blue_machine_name+url_mdc" : "blue_machine_name", 900 + viewport + (mdcMatches ? 1800 : 0), element);
       else if (/machine|model/i.test(`${element.className} ${element.id}`)) add(element.textContent, "machine_named_element", 850, element);
     }
+    add(findLabeledValue(["機種名", "機種"], root), "labeled_machine", 1550);
+    for (const element of root.querySelectorAll("div,span,p,strong,b,td,th")) {
+      if (!isVisible(element) || element.children.length > 2) continue;
+      const value = clean(element.textContent);
+      if (!looksLikePachinkoMachineName(value)) continue;
+      const nearUnitHeader = hasNearbyUnitHeader(element);
+      add(value, nearUnitHeader ? "visible_machine_name_near_unit_header" : "visible_machine_name", nearUnitHeader ? 1500 : 1050, element);
+    }
     const titleParts = document.title.split(/[|｜\-–—]/).map(clean);
     for (const part of titleParts) add(part, "page_title", 700);
     add(state.settings?.manualMachineName, "manual_override", 300);
@@ -366,12 +379,31 @@
     return clean(normalizeAsciiWidth(value)).replace(/^FREE\s*/i, "").replace(/^機種(?:名)?\s*[:：]?\s*/, "");
   }
 
+  function looksLikePachinkoMachineName(value) {
+    value = sanitizeMachineName(value);
+    if (!value || value.length < 4 || value.length > 120) return false;
+    if (/[：:]\s*\d|^\d/.test(value)) return false;
+    return /^(?:P|PA|PF|Pフィーバー|e)[\s　]*[^\s　]/i.test(value) ||
+      /(?:海物語|大海|沖海|エヴァ|リゼロ|リコリス|リコイル|東京喰種|北斗|慶次|まどか|転スラ|東リべ|牙狼|ユニコーン|からくり|シンフォギア)/.test(value);
+  }
+
+  function hasNearbyUnitHeader(element) {
+    let cursor = element;
+    for (let depth = 0; cursor && depth < 3; depth += 1, cursor = cursor.parentElement) {
+      const text = clean(cursor.textContent);
+      if (/\d+\s*台\s*[\/／]\s*【?\d+】?\s*パチ/.test(text)) return true;
+    }
+    const next = element.nextElementSibling;
+    const prev = element.previousElementSibling;
+    return [next, prev].some((node) => node && /\d+\s*台\s*[\/／]\s*【?\d+】?\s*パチ/.test(clean(node.textContent)));
+  }
+
   function isPlausibleMachineName(value, storeName = "") {
     return Boolean(value && value !== "unknown" && value.length >= 4 && value.length <= 120 &&
       !FORBIDDEN_MACHINE_NAMES.has(value) &&
       !sameIdentityText(value, storeName) &&
       !/(?:戻る|トップへ|前の台|次の台|一覧へ)$|^(?:<<|＜＜|戻る|ホーム)/i.test(value) &&
-      !/^(?:Site.?7|サイトセブン|出玉情報|出玉推移|大当り履歴|大当たり履歴|出玉詳細|連日データ|データ|機種情報|HYPER ARROW|名無し|匿名|ゲスト|マイリスト|マイメモリー|設置機種)/i.test(value) &&
+      !/^(?:Site.?7|サイトセブン|ホールTOP|店舗TOP|出玉情報|出玉推移|大当り履歴|大当たり履歴|出玉詳細|連日データ|データ|機種情報|HYPER ARROW|名無し|匿名|ゲスト|マイリスト|マイメモリー|設置機種)/i.test(value) &&
       !/^\d{1,2}[\/.-]\d{1,2}$/.test(value));
   }
 
@@ -437,6 +469,45 @@
     const reason = agreeingReasons.length ? agreeingReasons.join("+") : selected.reason;
     const confidence = matchingOrange ? "A" : agreeingReasons.length >= 2 ? "A" : agreeingReasons.length === 1 ? "B" : selectedValue ? "C" : "D";
     return { ...selected, reason, confidence, ignoredCandidates: dedupeValueReason(ignoredCandidates), singleUnitPage: Boolean(agreeingReasons.length || candidates.some((candidate) => candidate.reason === "selected_dai_select")) };
+  }
+
+  function collectCrawlDaiList(root = document, urlInfo = parseSite7Url(location.href)) {
+    const current = urlInfo.daiCandidate ? String(Number(urlInfo.daiCandidate)) : "";
+    const selectCandidates = [];
+    for (const select of root.querySelectorAll("select")) {
+      if (!isVisible(select)) continue;
+      const hint = `${select.name} ${select.id} ${select.getAttribute("aria-label") || ""} ${select.parentElement?.textContent || ""}`;
+      const values = uniqueDaiValues([...select.options].map((option) => {
+        const raw = `${option.textContent || ""} ${option.value || ""}`;
+        return daiFromUrlLike(option.value) || extractDai(raw, true);
+      }));
+      if (values.length < 2) continue;
+      const hintScore = /台|dai|unit|machine.?no/i.test(hint) ? 1000 : 0;
+      const currentScore = current && values.includes(current) ? 500 : 0;
+      selectCandidates.push({ values, reason: "dai_select_options", score: hintScore + currentScore + values.length });
+    }
+    const bestSelect = selectCandidates.sort((a, b) => b.score - a.score)[0];
+    if (bestSelect) return { values: bestSelect.values, reason: bestSelect.reason, confidence: bestSelect.score >= 1500 ? "A" : "B" };
+
+    const linkValues = uniqueDaiValues([...root.querySelectorAll("a[href]")]
+      .filter(isVisible)
+      .map((anchor) => daiFromUrlLike(anchor.href) || extractDai(clean(anchor.textContent), true)));
+    if (linkValues.length >= 5) return { values: linkValues, reason: "dai_links", confidence: current && linkValues.includes(current) ? "B" : "C" };
+    if (current) return { values: [current], reason: "url_dn_fallback", confidence: "C" };
+    return { values: [], reason: "not_detected", confidence: "D" };
+  }
+
+  function uniqueDaiValues(values) {
+    return [...new Set(values.map(normalizeDai).filter((value) => value && value !== "unknown"))].sort((a, b) => Number(a) - Number(b));
+  }
+
+  function daiFromUrlLike(value) {
+    try {
+      const url = new URL(String(value || ""), location.href);
+      return extractDai(url.searchParams.get("dn") || "", false);
+    } catch (_) {
+      return "";
+    }
   }
 
   function chooseDaiCandidate(candidates, urlDaiCandidate) {
@@ -862,16 +933,21 @@
       const no = parseHistoryCell(noRaw);
       if (no === null || no === "" || (typeof no !== "number" && no !== "-")) continue;
       const payoutRaw = get(indexes.payout >= 0 ? indexes.payout : cells.length - 1);
+      const startRaw = get(indexes.start >= 0 ? indexes.start : 2);
       const chanceHit = isChanceHistoryRow(row, cells);
       const rawCells = cells.map((cell) => clean(cell.textContent));
+      const yutime = isYutimeHistoryRow(noRaw, rawCells);
       dataRows.push({
         no,
         time: get(indexes.time >= 0 ? indexes.time : 1) || null,
-        start: parseHistoryCell(get(indexes.start >= 0 ? indexes.start : 2)),
+        start: parseHistoryCell(startRaw),
         payout: parseHistoryCell(payoutRaw),
-        statusText: chanceHit ? "チャンス中大当り" : "通常",
-        status: chanceHit ? "チャンス中大当り" : "通常",
+        statusText: yutime ? "遊タイム" : (chanceHit ? "チャンス中大当り" : "通常"),
+        status: yutime ? "遊タイム" : (chanceHit ? "チャンス中大当り" : "通常"),
         isChanceHit: chanceHit,
+        isYutime: yutime,
+        yutimeEntryStart: yutime ? parseParentheticalCount(startRaw) : null,
+        yutimeDeductStarts: yutime ? parseParentheticalCount(payoutRaw) : null,
         rawCells
       });
     }
@@ -921,6 +997,16 @@
     if (!text) return null;
     if (/^(?:-|--|―|－|−|↑)$/.test(text)) return text;
     return /^-?\d[\d,]*(?:\.\d+)?$/.test(text) ? Number(text.replace(/,/g, "")) : text;
+  }
+
+  function parseParentheticalCount(value) {
+    const text = clean(value).replace(/[（）]/g, (char) => char === "（" ? "(" : ")");
+    const match = text.match(/\((-?\d[\d,]*)\s*(?:回|G|ゲーム)?\)/i);
+    return match ? Number(match[1].replace(/,/g, "")) : null;
+  }
+
+  function isYutimeHistoryRow(noRaw, rawCells) {
+    return /遊\s*タイム|遊time|yutime/i.test([noRaw, ...(rawCells || [])].join(" "));
   }
 
   function isChanceHistoryRow(row, cells) {
@@ -1081,6 +1167,16 @@
       const outside = end.y < Math.min(axis.graphUpperLineY, axis.graphLowerLineY) - 2 ? "over_axis_limit" :
         end.y > Math.max(axis.graphUpperLineY, axis.graphLowerLineY) + 2 ? "under_axis_limit" : "calculated";
       if (outside !== "calculated") return applyManualGraphStatus({ ...base, ...axis, graphEndY: end.y, diffBallsStatus: outside });
+      if (Math.abs(raw) > GRAPH_DIFF_RELIABLE_LIMIT) {
+        return applyManualGraphStatus({
+          ...base, ...axis, graphEndY: end.y, graphScaleBallsPerPixel: scale,
+          diffBallsRaw: raw, diffBallsFinal: null,
+          diffBallsStatus: raw > 0 ? "over_axis_limit" : "under_axis_limit",
+          diffBallsMethod: `dom_pixel_${axisSource}`,
+          diffBallsConfidence: "D",
+          graphAnalysisError: `Calculated diff ${Math.round(raw)} exceeded +/-${GRAPH_DIFF_RELIABLE_LIMIT}; value was not adopted`
+        });
+      }
       const axisConfidence = axisSource === "dom_axis_labels" ? end.confidence : (axisSource === "gridline_spacing" ? "B" : "C");
       return applyManualGraphStatus({
         ...base, ...axis, graphEndY: end.y, graphScaleBallsPerPixel: scale,
@@ -1138,8 +1234,11 @@
       if (!match || !isVisible(node)) continue;
       const value = Number(match[1].replace(/[＋,\s]/g, "").replace("−", "-"));
       if (!Number.isFinite(value) || Math.abs(value) < 1000) continue;
+      if (Math.abs(value) > GRAPH_DIFF_RELIABLE_LIMIT) continue;
       const rect = node.getBoundingClientRect();
       if (rect.bottom < graphRect.top - 20 || rect.top > graphRect.bottom + 20) continue;
+      if (rect.left > graphRect.left + graphRect.width * 0.35) continue;
+      if (rect.height > rect.width * 2.2 && Math.abs(value) !== GRAPH_DIFF_RELIABLE_LIMIT) continue;
       labels.push({ text, value, y: ((rect.top + rect.bottom) / 2 - graphRect.top) * scaleY, rect: rectObject(rect) });
     }
     const upper = labels.filter((item) => item.value > 0).sort((a, b) => b.value - a.value)[0];
@@ -1595,6 +1694,7 @@
   }
 
   function shouldAutoSave(inspection) {
+    if (state.settings?.suppressAutoSave) return false;
     return Boolean(state.settings?.autoSave || inspection?.screenType === "graph");
   }
 
