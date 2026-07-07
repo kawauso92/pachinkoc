@@ -28,6 +28,7 @@ const DEFAULT_SETTINGS = {
   crawlGraph: true,
   crawlHistory: true,
   crawlDetail: true,
+  crawlDtdd: "",
   crawlMinDelay: 2000,
   crawlMaxDelay: 5000,
   crawlDryRun: false,
@@ -64,28 +65,55 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 // browser doing real navigations.
 const SITE7_SCREEN_FILES = { graph: "D2600.do", history: "D2700.do", detail: "D4000.do" };
 let crawlState = null;
+let crawlRunSeq = 0;
 
 function parseDnList(spec) {
+  return parseNumberListSpec(spec, 1000);
+}
+
+function parseDtddList(spec, baseUrl) {
+  const fallback = (() => {
+    try {
+      const value = new URL(baseUrl).searchParams.get("dtdd");
+      return /^\d+$/.test(value || "") ? Number(value) : 0;
+    } catch (_) {
+      return 0;
+    }
+  })();
+  const text = String(spec || "").trim();
+  if (!text) return [fallback];
+  const out = parseNumberListSpec(text, 60);
+  return out.length ? out : [fallback];
+}
+
+function parseNumberListSpec(spec, maxRangeLength) {
   const out = [];
   const seen = new Set();
-  for (const token of String(spec || "").split(/[\s,、]+/).filter(Boolean)) {
-    const range = token.match(/^(\d+)\s*[-~〜]\s*(\d+)$/);
-    if (range) {
-      const [start, end] = [Number(range[1]), Number(range[2])].sort((a, b) => a - b);
-      for (let dn = start; dn <= end && dn - start < 1000; dn++) addDn(dn);
-    } else if (/^\d+$/.test(token)) {
-      addDn(Number(token));
-    }
+  const normalized = String(spec || "")
+    .normalize("NFKC")
+    .replace(/[ー－―‐–—]/g, "-")
+    .replace(/[~〜～]/g, "-");
+  const pattern = /(\d+)(?:\s*-\s*(\d+))?/g;
+  let match;
+  while ((match = pattern.exec(normalized))) {
+    const start = Number(match[1]);
+    const end = match[2] !== undefined ? Number(match[2]) : start;
+    const [from, to] = [start, end].sort((a, b) => a - b);
+    for (let value = from; value <= to && value - from < maxRangeLength; value++) add(value);
   }
-  function addDn(dn) { const key = String(dn); if (!seen.has(key)) { seen.add(key); out.push(dn); } }
+  function add(value) {
+    const key = String(value);
+    if (!seen.has(key)) { seen.add(key); out.push(value); }
+  }
   return out;
 }
 
-function buildCrawlUrl(baseUrl, screenFile, dn) {
+function buildCrawlUrl(baseUrl, screenFile, dn, dtdd) {
   const url = new URL(baseUrl);
   if (!/[^/]*\.do$/i.test(url.pathname)) throw new Error("base URL is not a Site7 .do page");
   url.pathname = url.pathname.replace(/[^/]*\.do$/i, screenFile);
   url.searchParams.set("dn", String(dn));
+  url.searchParams.set("dtdd", String(dtdd));
   return url.toString();
 }
 
@@ -97,10 +125,12 @@ function crawlProgress() {
     total: crawlState.steps.length,
     done: crawlState.index, // 進行済みステップ数（再試行で水増ししない）
     index: crawlState.index,
-    current: crawlState.steps[crawlState.index] ? { dn: crawlState.steps[crawlState.index].dn, screen: crawlState.steps[crawlState.index].screen } : null,
+    current: crawlState.steps[crawlState.index] ? { dn: crawlState.steps[crawlState.index].dn, dtdd: crawlState.steps[crawlState.index].dtdd, screen: crawlState.steps[crawlState.index].screen } : null,
     results: crawlState.results.slice(-60),
+    stopping: Boolean(crawlState.stop && crawlState.running),
     backoffUntil: crawlState.backoffUntil || null,
     stoppedReason: crawlState.stoppedReason || null,
+    stopRequestedAt: crawlState.stopRequestedAt || null,
     startedAt: crawlState.startedAt,
     finishedAt: crawlState.finishedAt || null
   };
@@ -109,8 +139,13 @@ function crawlProgress() {
 async function getCrawlStatus() { return { ok: true, ...crawlProgress() }; }
 
 async function stopCrawl() {
-  if (crawlState?.running) crawlState.stop = true;
-  return { ok: true, stopping: Boolean(crawlState?.running) };
+  if (crawlState?.running) {
+    crawlState.stop = true;
+    crawlState.stoppedReason = crawlState.stoppedReason || "user_stop";
+    crawlState.stopRequestedAt = Date.now();
+    crawlState.backoffUntil = null;
+  }
+  return { ok: true, stopping: Boolean(crawlState?.running), ...crawlProgress() };
 }
 
 async function startCrawl(message) {
@@ -124,6 +159,7 @@ async function startCrawl(message) {
   }
   const dnList = parseDnList(message.dnSpec);
   if (!dnList.length) return { ok: false, error: "台番号（dn）が指定されていません" };
+  const dtddList = parseDtddList(message.dtddSpec, message.baseUrl);
   const screens = (Array.isArray(message.screens) && message.screens.length ? message.screens : ["graph", "history", "detail"])
     .filter((screen) => SITE7_SCREEN_FILES[screen]);
   if (!screens.length) return { ok: false, error: "取得する画面が選ばれていません" };
@@ -131,8 +167,8 @@ async function startCrawl(message) {
   let steps;
   try {
     steps = [];
-    for (const dn of dnList) for (const screen of screens) {
-      steps.push({ dn, screen, url: buildCrawlUrl(message.baseUrl, SITE7_SCREEN_FILES[screen], dn) });
+    for (const dtdd of dtddList) for (const dn of dnList) for (const screen of screens) {
+      steps.push({ dn, dtdd, screen, url: buildCrawlUrl(message.baseUrl, SITE7_SCREEN_FILES[screen], dn, dtdd) });
     }
   } catch (error) {
     return { ok: false, error: `${error.message}（対象機種・日付のSite7ページを開いた状態で開始してください）` };
@@ -141,46 +177,51 @@ async function startCrawl(message) {
   const minDelayMs = clamp(Number(message.minDelayMs) || 4000, 1500, 60000);
   const maxDelayMs = clamp(Number(message.maxDelayMs) || 8000, minDelayMs, 120000);
   if (message.dryRun) {
-    return { ok: true, dryRun: true, total: steps.length, dnCount: dnList.length,
-      urls: steps.map((step) => ({ dn: step.dn, screen: step.screen, url: step.url })) };
+    return { ok: true, dryRun: true, total: steps.length, dnCount: dnList.length, dtddCount: dtddList.length,
+      urls: steps.map((step) => ({ dn: step.dn, dtdd: step.dtdd, screen: step.screen, url: step.url })) };
   }
 
   const forceMachine = (await getSettings()).settings.crawlMachine || "";
-  crawlState = { running: true, dryRun: false, steps, index: 0, tabId, results: [], stop: false,
+  const runId = ++crawlRunSeq;
+  crawlState = { runId, running: true, dryRun: false, steps, index: 0, tabId, results: [], stop: false,
     minDelayMs, maxDelayMs, settleMs: clamp(Number(message.settleMs) || 2000, 500, 15000),
-    forceMachine, backoffUntil: null, stoppedReason: null, startedAt: Date.now(), finishedAt: null };
-  runCrawl();
-  return { ok: true, started: true, total: steps.length, dnCount: dnList.length };
+    forceMachine, backoffUntil: null, stoppedReason: null, stopRequestedAt: null, startedAt: Date.now(), finishedAt: null };
+  runCrawl(runId);
+  return { ok: true, started: true, total: steps.length, dnCount: dnList.length, dtddCount: dtddList.length };
 }
 
-async function runCrawl() {
+async function runCrawl(runId) {
   // Strip manual overrides so each 台 is auto-detected; a fixed manual 台番号 or
   // 差玉 would otherwise be written onto every machine in the crawl.
   const stored = (await getSettings()).settings;
   const settings = { ...stored, enabled: true, manualStoreName: "", manualMachineName: "", manualDai: "", manualBusinessDate: "", manualDiffBalls: "" };
   let consecutiveBusy = 0;
-  while (crawlState.index < crawlState.steps.length && !crawlState.stop) {
+  while (isActiveCrawl(runId) && crawlState.index < crawlState.steps.length && !crawlState.stop) {
     const step = crawlState.steps[crawlState.index];
     let busy = false;
     try {
+      throwIfCrawlStopped(runId);
       await chrome.tabs.update(crawlState.tabId, { url: step.url, active: true });
-      await waitForTabComplete(crawlState.tabId);
-      if (crawlState.stop) break;
-      await interruptibleDelay(crawlState.settleMs);
-      if (crawlState.stop) break;
-      const response = await captureViaContentScript(crawlState.tabId, settings);
+      await waitForTabComplete(crawlState.tabId, runId);
+      throwIfCrawlStopped(runId);
+      await interruptibleDelay(crawlState.settleMs, runId);
+      throwIfCrawlStopped(runId);
+      const response = await captureViaContentScript(crawlState.tabId, settings, runId);
+      throwIfCrawlStopped(runId);
       busy = Boolean(response?.busy);
       if (busy) {
-        crawlState.results.push({ dn: step.dn, screen: step.screen, ok: false, status: "busy" });
+        crawlState.results.push({ dn: step.dn, dtdd: step.dtdd, screen: step.screen, ok: false, status: "busy" });
       } else {
         const saved = response?.results?.filter((result) => result.status !== "unchanged").length || 0;
-        crawlState.results.push({ dn: step.dn, screen: step.screen, ok: Boolean(response?.ok),
+        crawlState.results.push({ dn: step.dn, dtdd: step.dtdd, screen: step.screen, ok: Boolean(response?.ok),
           status: response?.skipped ? "skipped" : (saved ? "saved" : "unchanged") });
       }
     } catch (error) {
-      crawlState.results.push({ dn: step.dn, screen: step.screen, ok: false, status: "error", error: error.message });
+      if (isCrawlStopError(error) || crawlState?.stop) break;
+      crawlState.results.push({ dn: step.dn, dtdd: step.dtdd, screen: step.screen, ok: false, status: "error", error: error.message });
     }
 
+    if (!isActiveCrawl(runId) || crawlState.stop) break;
     if (busy) {
       // 混雑検出：同じ台を進めず、指数バックオフで待ってから再試行する。
       // 連続で上限に達したら、叩き続けず巡回を停止する。
@@ -188,7 +229,7 @@ async function runCrawl() {
       if (consecutiveBusy >= CRAWL_BUSY.maxRetries) { crawlState.stoppedReason = "busy_limit"; break; }
       const backoff = Math.min(CRAWL_BUSY.baseMs * 2 ** (consecutiveBusy - 1), CRAWL_BUSY.maxMs);
       crawlState.backoffUntil = Date.now() + backoff;
-      await interruptibleDelay(backoff);
+      await interruptibleDelay(backoff, runId);
       crawlState.backoffUntil = null;
       continue; // index を進めず同じステップを再試行
     }
@@ -196,27 +237,29 @@ async function runCrawl() {
     consecutiveBusy = 0;
     crawlState.index += 1;
     if (crawlState.index < crawlState.steps.length && !crawlState.stop) {
-      await interruptibleDelay(randomBetween(crawlState.minDelayMs, crawlState.maxDelayMs));
+      await interruptibleDelay(randomBetween(crawlState.minDelayMs, crawlState.maxDelayMs), runId);
     }
   }
+  if (!isActiveCrawl(runId)) return;
+  if (crawlState.stop) crawlState.stoppedReason = crawlState.stoppedReason || "user_stop";
   crawlState.running = false;
   crawlState.backoffUntil = null;
   crawlState.finishedAt = Date.now();
 }
 
 // 停止フラグを監視し、待機中でも停止ボタンに即応できる中断可能な遅延。
-function interruptibleDelay(ms) {
+function interruptibleDelay(ms, runId = crawlState?.runId) {
   return new Promise((resolve) => {
     const start = Date.now();
     const tick = () => {
-      if (!crawlState || crawlState.stop || Date.now() - start >= ms) { resolve(); return; }
+      if (!isActiveCrawl(runId) || crawlState.stop || Date.now() - start >= ms) { resolve(); return; }
       setTimeout(tick, 250);
     };
     tick();
   });
 }
 
-function waitForTabComplete(tabId, timeoutMs = 30000) {
+function waitForTabComplete(tabId, runId, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
     let settled = false;
     const finish = (error) => {
@@ -224,29 +267,38 @@ function waitForTabComplete(tabId, timeoutMs = 30000) {
       settled = true;
       chrome.tabs.onUpdated.removeListener(listener);
       clearTimeout(timer);
+      clearInterval(stopTimer);
       error ? reject(error) : resolve();
     };
     const listener = (id, info) => { if (id === tabId && info.status === "complete") finish(); };
     const timer = setTimeout(() => finish(new Error("ページ読込がタイムアウトしました")), timeoutMs);
+    const stopTimer = setInterval(() => {
+      if (!isActiveCrawl(runId) || crawlState.stop) finish(crawlStopError());
+    }, 250);
     chrome.tabs.onUpdated.addListener(listener);
     chrome.tabs.get(tabId).then((tab) => { if (tab?.status === "complete") finish(); }).catch((error) => finish(error));
   });
 }
 
-async function captureViaContentScript(tabId, settings, attempts = 6) {
+async function captureViaContentScript(tabId, settings, runId, attempts = 6) {
   let lastError = null;
   for (let attempt = 0; attempt < attempts; attempt++) {
+    throwIfCrawlStopped(runId);
     try {
       const response = await chrome.tabs.sendMessage(tabId, { type: "CAPTURE_PAGE", settings });
       if (response) return response;
     } catch (error) { lastError = error; }
-    await delay(700);
+    await interruptibleDelay(700, runId);
   }
   throw new Error(`取得スクリプトに接続できません${lastError ? `（${lastError.message}）` : ""}`);
 }
 
 function delay(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 function randomBetween(min, max) { return Math.round(min + Math.random() * (max - min)); }
+function isActiveCrawl(runId) { return Boolean(crawlState && crawlState.runId === runId); }
+function crawlStopError() { const error = new Error("巡回を停止しました"); error.name = "CrawlStopped"; return error; }
+function isCrawlStopError(error) { return error?.name === "CrawlStopped"; }
+function throwIfCrawlStopped(runId) { if (!isActiveCrawl(runId) || crawlState.stop) throw crawlStopError(); }
 
 async function handleMessage(message, sender = null) {
   switch (message?.type) {
@@ -311,7 +363,10 @@ async function captureVisibleGraph(message, sender) {
   const manualOverride = parseOptionalNumber(message.manualOverride);
   const raw = analysis.diffBallsRaw;
   const estimatedAxis = analysis.status === "calculated_estimated_axis";
-  const finalValue = manualOverride ?? raw;
+  const autoOutOfRange = manualOverride === null && Number.isFinite(raw) && Math.abs(raw) > GRAPH_DIFF_RELIABLE_LIMIT;
+  const finalValue = autoOutOfRange ? null : (manualOverride ?? raw);
+  const diffBallsStatus = manualOverride !== null ? "manual_override"
+    : (autoOutOfRange ? (raw > 0 ? "over_axis_limit" : "under_axis_limit") : analysis.status);
 
   return {
     ok: true,
@@ -331,9 +386,9 @@ async function captureVisibleGraph(message, sender) {
       diffBallsCandidate: null,
       diffBallsManualOverride: manualOverride,
       diffBallsFinal: finalValue,
-      diffBallsStatus: manualOverride !== null ? "manual_override" : analysis.status,
+      diffBallsStatus,
       diffBallsMethod: manualOverride !== null ? "manual" : analysis.method,
-      diffBallsConfidence: manualOverride !== null ? "A" : analysis.diffBallsConfidence,
+      diffBallsConfidence: manualOverride !== null ? "A" : (autoOutOfRange ? "D" : analysis.diffBallsConfidence),
       axisAssumption: analysis.axisAssumption,
       axisConfidence: analysis.axisConfidence,
       graphUpperValue: analysis.graphUpperValue,
@@ -346,7 +401,9 @@ async function captureVisibleGraph(message, sender) {
       graphScaleBallsPerPixel: analysis.graphScaleBallsPerPixel,
       horizontalGridLines: analysis.horizontalGridLines,
       lineColorCandidates: analysis.lineColorCandidates,
-      graphAnalysisError: analysis.error
+      graphAnalysisError: autoOutOfRange
+        ? `Calculated diff ${Math.round(raw)} exceeded +/-${GRAPH_DIFF_RELIABLE_LIMIT}; value was not adopted`
+        : analysis.error
     }
   };
 }
@@ -593,14 +650,17 @@ async function blobToDataUrl(blob) {
   return `data:${blob.type || "image/png"};base64,${btoa(binary)}`;
 }
 
-async function getSettings() {
+async function getSettings(includeTransient = true) {
   const stored = await chrome.storage.local.get(STORAGE_KEYS.settings);
-  return { ok: true, settings: { ...DEFAULT_SETTINGS, ...(stored[STORAGE_KEYS.settings] || {}) } };
+  const settings = { ...DEFAULT_SETTINGS, ...(stored[STORAGE_KEYS.settings] || {}) };
+  if (includeTransient) settings.suppressAutoSave = Boolean(crawlState?.running);
+  return { ok: true, settings };
 }
 
 async function setSettings(patch) {
-  const current = (await getSettings()).settings;
-  const settings = { ...current, ...patch };
+  const current = (await getSettings(false)).settings;
+  const { suppressAutoSave: _suppressAutoSave, ...cleanPatch } = patch;
+  const settings = { ...current, ...cleanPatch };
   await chrome.storage.local.set({ [STORAGE_KEYS.settings]: settings });
   return { ok: true, settings };
 }
@@ -816,7 +876,7 @@ function normalizeIdentityText(value) {
 
 function isForbiddenMachineName(value, storeName = "") {
   const normalized = normalizeIdentityText(value);
-  const forbidden = ["閲覧履歴", "出玉情報", "出玉推移", "大当り履歴", "大当たり履歴", "出玉詳細", "運日データ", "連日データ", "大当り一覧", "大当たり一覧", "出玉推移一覧", "マイページ", "メニュー", "HYPER ARROW美原店",
+  const forbidden = ["閲覧履歴", "ホールTOP", "店舗TOP", "出玉情報", "出玉推移", "大当り履歴", "大当たり履歴", "出玉詳細", "運日データ", "連日データ", "大当り一覧", "大当たり一覧", "出玉推移一覧", "マイページ", "メニュー", "HYPER ARROW美原店",
     "名無しさん", "名無し", "匿名", "ゲスト", "マイリスト", "マイメモリー", "マイリストに追加", "マイメモリーに追加", "設置機種", "全体を見る", "前の台", "次の台"]
     .map(normalizeIdentityText);
   return !normalized || forbidden.includes(normalized) || normalized === normalizeIdentityText(storeName);
@@ -1047,7 +1107,36 @@ function finalizeRecord(record) {
   else if (statuses.length === 3) record.mergeStatus = "complete";
   else if (statuses.length === 1 && record.parts?.graph?.status === "captured") record.mergeStatus = "graphOnly";
   else record.mergeStatus = "partial";
+  applyYutimeNormalStartAdjustment(record);
   return applyCalculations(record);
+}
+
+function applyYutimeNormalStartAdjustment(record) {
+  const summary = record.parts?.summary;
+  const history = record.parts?.history;
+  if (!summary || summary.status !== "captured") return record;
+  const deduction = yutimeDeductStartsFromHistory(history);
+  const previousDeduction = Number(summary.yutimeDeductStarts) || 0;
+  const wasAlreadyAdjusted = isFiniteNumber(summary.normalStartsRaw) && previousDeduction > 0 &&
+    summary.normalStarts === Math.max(0, summary.normalStartsRaw - previousDeduction);
+  const rawNormal = wasAlreadyAdjusted ? summary.normalStartsRaw : summary.normalStarts;
+  if (!isFiniteNumber(rawNormal)) return record;
+  summary.yutimeDeductStarts = deduction || null;
+  if (deduction > 0) {
+    summary.normalStartsRaw = rawNormal;
+    summary.normalStarts = Math.max(0, rawNormal - deduction);
+  } else if (isFiniteNumber(summary.normalStartsRaw)) {
+    summary.normalStarts = summary.normalStartsRaw;
+    delete summary.normalStartsRaw;
+  }
+  return record;
+}
+
+function yutimeDeductStartsFromHistory(history) {
+  return (history?.rows || []).reduce((sum, row) => {
+    const value = Number(row.yutimeDeductStarts);
+    return sum + (row.isYutime && Number.isFinite(value) && value > 0 ? value : 0);
+  }, 0);
 }
 
 function applyCalculations(record) {
@@ -1098,6 +1187,7 @@ function applyCalculations(record) {
   if (!isFiniteNumber(normalStarts)) reasons.push("normalStartsMissing");
   if (!isFiniteNumber(effectivePayout)) reasons.push("payoutTotalMissing");
   if (!isFiniteNumber(diffBallsFinal)) reasons.push("diffBallsMissing");
+  if (isFiniteNumber(diffBallsFinal) && Math.abs(diffBallsFinal) > GRAPH_DIFF_RELIABLE_LIMIT) assumptionsPre.push("diffGraphOutOfRange");
   if (historyMismatch) reasons.push(`historyHitCountMismatch(summary=${jackpot},history=${historyHitCount})`);
   if (payoutEstimated) assumptionsPre.push("rotationRateEstimated");
   calculation.rotationRateEstimated = payoutEstimated;
@@ -1251,6 +1341,8 @@ const MACHINE_ALIAS_RULES = [
   { test: /新世紀エヴァンゲリオン|エヴァンゲリオン/, name: "エヴァ" },
   { test: /東京喰種|東京グール/, name: "東京グール" },
   { test: /沖縄6|沖海6/, name: "沖海6" },
+  { test: /大海物語5.*スペシャル|大海5.*スペシャル|大海物語5.*special|大海5.*special/, name: "大海5sp" },
+  { test: /大海物語5.*mte2|大海5.*mte2/, name: "大海5" },
   { test: /大海物語5|大海5/, name: "大海5" },
   { test: /大海物語4|大海4/, name: "大海4" },
   { test: /転生したらスライム|転スラ/, name: "転スラ" },
@@ -1267,7 +1359,7 @@ function findMachineSpec(machineName, kishus) {
   const matchedRule = MACHINE_ALIAS_RULES.find((rule) => rule.test.test(normalized));
   if (matchedRule?.block) return null; // 別機種誤マッチ防止：未解決→計算エラーで告知
   const aliasName = matchedRule?.name || null;
-  let row = aliasName ? kishus.find((item) => item.name === aliasName) : null;
+  let row = aliasName ? kishus.find((item) => item.name === aliasName || normalizeMasterText(item.name) === normalizeMasterText(aliasName)) : null;
   if (!row) row = kishus.find((item) => normalizeMasterText(item.name) === normalized);
   if (!row) {
     row = kishus.filter((item) => normalizeMasterText(item.name).length >= 2 && normalized.includes(normalizeMasterText(item.name)))
@@ -1378,6 +1470,8 @@ const SPREADSHEET_CSV_COLUMNS = [
   ["最終スタート", "finalStarts"], ["取得状態", "captureStatus"], ["メモ", "notes"]
 ];
 
+const GRAPH_DIFF_RELIABLE_LIMIT = 30000;
+
 function flattenRecord(record, spreadsheet = false) {
   const summary = record.parts?.summary || {};
   const history = record.parts?.history || {};
@@ -1386,9 +1480,18 @@ function flattenRecord(record, spreadsheet = false) {
   const calculationInputs = calculation.inputs || record.calculationInputs || {};
   const notes = [...(record.notes || [])];
   if (calculation.idle) notes.push("未稼働");
+  if (Number.isFinite(summary.yutimeDeductStarts) && summary.yutimeDeductStarts > 0) {
+    notes.push(`遊タイム控除: 通常${summary.normalStartsRaw}->${summary.normalStarts} (-${summary.yutimeDeductStarts})`);
+  }
   if (calculation.rotationRateEstimated) notes.push("回転率は推定値(精度低・超中小×内訳出玉)");
+  if (isFiniteNumber(graph.diffBallsFinal) && Math.abs(graph.diffBallsFinal) > GRAPH_DIFF_RELIABLE_LIMIT) {
+    notes.push(`差玉±${GRAPH_DIFF_RELIABLE_LIMIT}超過: グラフ範囲外の可能性あり（差玉・推定使用玉・回転率・期待時給・仕事量は要確認）`);
+  }
   if (calculation.calculationStatus?.length) notes.push(`calculationStatus: ${calculation.calculationStatus.join("|")}`);
   if (graph.status === "captured" && !Number.isFinite(graph.diffBallsFinal)) {
+    if (graph.diffBallsStatus === "over_axis_limit" || graph.diffBallsStatus === "under_axis_limit") {
+      notes.push(`差玉計測不能: グラフ範囲外（±${GRAPH_DIFF_RELIABLE_LIMIT}超過）として自動解析値を不採用`);
+    }
     notes.push(`diffBallsStatus: ${graph.diffBallsStatus || "missing"}`);
     if (graph.screenshotCaptureError) notes.push(`screenshotCaptureError: ${graph.screenshotCaptureError}`);
     if (graph.graphAnalysisError) notes.push(`graphAnalysisError: ${graph.graphAnalysisError}`);
@@ -1440,7 +1543,7 @@ function flattenRecord(record, spreadsheet = false) {
     historyDebug: {
       rowCount: history.rows?.length || 0,
       payoutTotal: history.payoutTotal,
-      rows: (history.rows || []).map((item) => ({ no: item.no, start: item.start, payout: item.payout, status: item.status, isChanceHit: item.isChanceHit })),
+      rows: (history.rows || []).map((item) => ({ no: item.no, start: item.start, payout: item.payout, status: item.status, isChanceHit: item.isChanceHit, isYutime: item.isYutime, yutimeEntryStart: item.yutimeEntryStart, yutimeDeductStarts: item.yutimeDeductStarts })),
       payoutIncludedRows: history.payoutIncludedRows,
       payoutExcludedRows: history.payoutExcludedRows
     },

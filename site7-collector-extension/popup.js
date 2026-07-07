@@ -3,7 +3,7 @@
 const $ = (selector) => document.querySelector(selector);
 const controls = ["enabled", "autoSave", "soundEnabled", "manualStoreName", "manualMachineName", "manualDai", "manualBusinessDate", "manualDiffBalls"];
 // 自動巡回の入力もpopupを閉じても保持する（settingsへ保存・復元）。
-const crawlControls = ["crawlDn", "crawlGraph", "crawlHistory", "crawlDetail", "crawlMinDelay", "crawlMaxDelay", "crawlDryRun"];
+const crawlControls = ["crawlDn", "crawlDtdd", "crawlGraph", "crawlHistory", "crawlDetail", "crawlMinDelay", "crawlMaxDelay", "crawlDryRun"];
 let lastInspection = null;
 let lastPageDebug = null;
 let showPendingOnly = false;
@@ -132,12 +132,23 @@ async function startCrawl() {
     setCrawlStatus("出玉推移ページ（…/D2600.do）を開いてから開始してください（他ページはパラメータが異なりエラーになります）", "bad");
     return;
   }
+  let dnSpec = $("#crawlDn").value.trim();
+  if (!dnSpec) {
+    const detected = await detectDaiList(tab.id);
+    if (detected.values.length) {
+      dnSpec = compactDaiSpec(detected.values);
+      $("#crawlDn").value = dnSpec;
+      await saveSettings();
+      setCrawlStatus(`台番号を自動検出しました: ${dnSpec}（${detected.reason} / ${detected.confidence}）`, "ok");
+    }
+  }
   const dryRun = $("#crawlDryRun").checked;
   const message = {
     type: "START_CRAWL",
     tabId: tab.id,
     baseUrl: tab.url,
-    dnSpec: $("#crawlDn").value,
+    dnSpec,
+    dtddSpec: $("#crawlDtdd").value.trim(),
     screens: crawlScreens(),
     dryRun,
     minDelayMs: Number($("#crawlMinDelay").value),
@@ -146,15 +157,40 @@ async function startCrawl() {
   const response = await chrome.runtime.sendMessage(message);
   if (!response?.ok) { setCrawlStatus(response?.error || "巡回を開始できませんでした", "bad"); return; }
   if (response.dryRun) {
-    const sample = response.urls.slice(0, 6).map((item) => `dn${item.dn}/${item.screen}: ${item.url}`).join("\n");
-    setCrawlStatus(`ドライラン: ${response.dnCount}台 × 画面 = ${response.total}ステップ`, "ok");
+    const sample = response.urls.slice(0, 6).map((item) => `dtdd${item.dtdd}/dn${item.dn}/${item.screen}: ${item.url}`).join("\n");
+    setCrawlStatus(`ドライラン: ${response.dtddCount || 1}日 × ${response.dnCount}台 × 画面 = ${response.total}ステップ`, "ok");
     $("#crawlLog").textContent = `${sample}${response.urls.length > 6 ? `\n…他 ${response.urls.length - 6} 件` : ""}`;
     return;
   }
-  setCrawlStatus(`巡回開始: ${response.dnCount}台 / ${response.total}ステップ`, "ok");
+  setCrawlStatus(`巡回開始: ${response.dtddCount || 1}日 × ${response.dnCount}台 / ${response.total}ステップ`, "ok");
   $("#crawlStart").disabled = true;
   $("#crawlStop").disabled = false;
   pollCrawl();
+}
+
+async function detectDaiList(tabId) {
+  try {
+    const response = await chrome.tabs.sendMessage(tabId, { type: "GET_DAI_LIST" });
+    const values = Array.isArray(response?.daiList?.values) ? response.daiList.values : [];
+    return { values, reason: response?.daiList?.reason || "not_detected", confidence: response?.daiList?.confidence || "D" };
+  } catch (_) {
+    return { values: [], reason: "content_script_unavailable", confidence: "D" };
+  }
+}
+
+function compactDaiSpec(values) {
+  const numbers = [...new Set(values.map((value) => Number(value)).filter(Number.isFinite))].sort((a, b) => a - b);
+  const ranges = [];
+  for (let index = 0; index < numbers.length; index++) {
+    const start = numbers[index];
+    let end = start;
+    while (index + 1 < numbers.length && numbers[index + 1] === end + 1) {
+      index += 1;
+      end = numbers[index];
+    }
+    ranges.push(start === end ? String(start) : `${start}-${end}`);
+  }
+  return ranges.join(",");
 }
 
 async function stopCrawl() {
@@ -179,18 +215,22 @@ function pollCrawl() {
 
 function renderCrawl(status) {
   if (!status || status.running === false && !status.total) return;
-  const current = status.current ? `dn${status.current.dn}/${status.current.screen}` : "—";
-  if (status.running && status.backoffUntil) {
+  const current = status.current ? `dtdd${status.current.dtdd}/dn${status.current.dn}/${status.current.screen}` : "—";
+  if (status.stopping) {
+    setCrawlStatus(`停止中… 現在の読み込みを中断しています（現在: ${current}）`, "warn");
+  } else if (status.running && status.backoffUntil) {
     const remain = Math.max(0, Math.ceil((status.backoffUntil - Date.now()) / 1000));
     setCrawlStatus(`混雑のため退避中… あと約${remain}秒で再試行（現在: ${current}）`, "warn");
   } else if (!status.running && status.stoppedReason === "busy_limit") {
     setCrawlStatus(`混雑が続いたため停止しました ${status.done}/${status.total}。時間を空けて再開してください`, "bad");
+  } else if (!status.running && status.stoppedReason === "user_stop") {
+    setCrawlStatus(`停止しました ${status.done}/${status.total}`, "warn");
   } else {
     setCrawlStatus(`${status.running ? "巡回中" : "完了"} ${status.done}/${status.total}（現在: ${current}）`, status.running ? "" : "ok");
   }
   const errors = (status.results || []).filter((result) => !result.ok).length;
   const log = (status.results || []).slice(-12).reverse()
-    .map((result) => `dn${result.dn}/${result.screen}: ${result.status}${result.error ? `（${result.error}）` : ""}`).join("\n");
+    .map((result) => `dtdd${result.dtdd ?? "?"}/dn${result.dn}/${result.screen}: ${result.status}${result.error ? `（${result.error}）` : ""}`).join("\n");
   $("#crawlLog").textContent = `${errors ? `エラー ${errors}件\n` : ""}${log}`;
 }
 
@@ -211,6 +251,7 @@ function applySettings(settings) {
   $("#manualDiffBalls").value = settings.manualDiffBalls ?? "";
   // 自動巡回入力の復元（未設定なら既定: 3画面ON・遅延8〜20秒）。
   $("#crawlDn").value = settings.crawlDn || "";
+  $("#crawlDtdd").value = settings.crawlDtdd || "";
   $("#crawlGraph").checked = settings.crawlGraph !== false;
   $("#crawlHistory").checked = settings.crawlHistory !== false;
   $("#crawlDetail").checked = settings.crawlDetail !== false;
@@ -234,6 +275,7 @@ function collectSettings() {
     manualBusinessDate: $("#manualBusinessDate").value,
     manualDiffBalls: $("#manualDiffBalls").value.trim(),
     crawlDn: $("#crawlDn").value.trim(),
+    crawlDtdd: $("#crawlDtdd").value.trim(),
     crawlGraph: $("#crawlGraph").checked,
     crawlHistory: $("#crawlHistory").checked,
     crawlDetail: $("#crawlDetail").checked,

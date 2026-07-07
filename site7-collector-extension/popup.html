@@ -30,7 +30,8 @@
       現在タブのURLを雛形に dn と画面ファイルだけを差し替え、実ブラウザを順に遷移して取得します。
       巡回中は対象タブを前面のままにしてください。
     </p>
-    <label>台番号(dn)<input type="text" id="crawlDn" autocomplete="off" placeholder="181-220 または 181,182,190-195"></label>
+    <label>台番号(dn)<input type="text" id="crawlDn" autocomplete="off" placeholder="空欄=自動 / 406-415,466-475"></label>
+    <label>日付(dtdd)<input type="text" id="crawlDtdd" autocomplete="off" placeholder="空欄=表示日 / 0-3"></label>
     <label>機種<select id="crawlMachine"><option value="">自動取得</option></select></label>
     <p class="hint">大当り履歴に出玉情報が無い店は、機種を選んで出玉内訳（超/中/小のR）を事前に指定してください。出玉が取れる店は「自動取得」でOK。実測payoutがある台は推定で上書きしません。</p>
     <div class="crawl-delays">
