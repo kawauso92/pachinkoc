@@ -34,6 +34,8 @@ const DEFAULT_SETTINGS = {
   crawlDryRun: false,
   // 巡回前に指定する機種（appa/appb名）。""=自動取得。指定時は全台に適用。
   crawlMachine: "",
+  // appa店舗マスターに無い店向けの交換率上書き（100円あたりの交換玉数）。
+  exchangeRateOverride: null,
   // 推定払出に対する出玉補正(%)。実出玉はスペックより少なめなことが多い。例 -1。
   payoutAdjustPercent: 0,
   // 機種ごとの超中小→出玉(玉数)の上書き。{ "エヴァ17": { cho, chu, sho } }
@@ -670,7 +672,11 @@ async function getData() {
   const masters = await getAppaMasters().catch(() => null);
   const breakdowns = await getKishuBreakdowns().catch(() => null);
   const settings = (await getSettings()).settings;
-  const payoutConfig = { adjustPercent: Number(settings.payoutAdjustPercent) || 0, overrides: settings.payoutMapOverrides || {} };
+  const payoutConfig = {
+    adjustPercent: Number(settings.payoutAdjustPercent) || 0,
+    overrides: settings.payoutMapOverrides || {},
+    exchangeRate: positiveNumberOrNull(settings.exchangeRateOverride)
+  };
   const stored = await chrome.storage.local.get([STORAGE_KEYS.records, STORAGE_KEYS.pending]);
   const records = Object.values(stored[STORAGE_KEYS.records] || {})
     .map((record) => applyMasterData(structuredClone(record), masters, breakdowns, payoutConfig))
@@ -735,12 +741,25 @@ function parseKishuBreakdownCsv(text) {
 async function getMachineOptions() {
   const masters = await getAppaMasters().catch(() => null);
   const breakdowns = await getKishuBreakdowns().catch(() => null);
-  const names = (masters?.kishus || []).map((item) => item.name).filter((name) => name && name !== "試し打ち");
-  const machines = names.map((name) => {
-    const breakdown = breakdowns?.[name] || [];
-    return { name, breakdown, auto: autoMapHitPayout(breakdown) };
+  const kishus = (masters?.kishus || []).filter((item) => item?.name && item.name !== "試し打ち");
+  const machines = kishus.map((machine) => {
+    // appb取得失敗・未登録でも、appa masters の rounds を候補として使う。
+    const breakdown = normalizePayoutBreakdown(breakdowns?.[machine.name]?.length ? breakdowns[machine.name] : machine.rounds);
+    return { name: machine.name, breakdown, auto: autoMapHitPayout(breakdown) };
   });
   return { ok: true, machines };
+}
+
+function normalizePayoutBreakdown(rows) {
+  const seen = new Set();
+  return (Array.isArray(rows) ? rows : []).reduce((out, row) => {
+    const balls = Number(row?.balls);
+    const rounds = Number(row?.rounds ?? String(row?.name || "").match(/\d+/)?.[0]);
+    if (!Number.isFinite(balls) || balls <= 0 || seen.has(balls)) return out;
+    seen.add(balls);
+    out.push({ balls, rounds: Number.isFinite(rounds) && rounds > 0 ? rounds : null });
+    return out;
+  }, []).sort((a, b) => a.balls - b.balls);
 }
 
 async function getKishuBreakdowns(forceRefresh = false) {
@@ -1111,6 +1130,11 @@ function finalizeRecord(record) {
   return applyCalculations(record);
 }
 
+function positiveNumberOrNull(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : null;
+}
+
 function applyYutimeNormalStartAdjustment(record) {
   const summary = record.parts?.summary;
   const history = record.parts?.history;
@@ -1158,7 +1182,9 @@ function applyCalculations(record) {
   let estimatedPayoutTotal = null;
   if (!isFiniteNumber(payoutTotal) && hitMap && !hitMap.tooMany) {
     const counts = [summary.choCount, summary.chuCount, summary.shoCount];
-    if (counts.some(isFiniteNumber)) {
+    const payouts = [hitMap.cho, hitMap.chu, hitMap.sho];
+    const mapCompleteForObservedHits = counts.every((count, index) => !isFiniteNumber(count) || count <= 0 || isFiniteNumber(payouts[index]));
+    if (counts.some(isFiniteNumber) && mapCompleteForObservedHits) {
       const adjust = 1 + (Number(record.calculationInputs?.payoutAdjustPercent) || 0) / 100;
       const sum = (Number(summary.choCount) || 0) * (Number(hitMap.cho) || 0)
         + (Number(summary.chuCount) || 0) * (Number(hitMap.chu) || 0)
@@ -1303,7 +1329,10 @@ function applyMasterData(record, masters, breakdowns = null, payoutConfig = {}) 
   const inputs = {
     ...previousInputs,
     machineSpec: previousInputs.machineSpec || machineSpec?.spec || null,
-    exchangeRate: previousInputs.exchangeRate || shop?.exchangeRate || null,
+    exchangeRate: positiveNumberOrNull(payoutConfig?.exchangeRate) || positiveNumberOrNull(previousInputs.exchangeRate) || shop?.exchangeRate || null,
+    exchangeRateSource: positiveNumberOrNull(payoutConfig?.exchangeRate)
+      ? "settings_override"
+      : (positiveNumberOrNull(previousInputs.exchangeRate) ? (previousInputs.exchangeRateSource || "saved_input") : (shop ? "appa_master" : null)),
     holdingRatio: Number.isFinite(Number(previousInputs.holdingRatio)) ? Number(previousInputs.holdingRatio) : 1,
     holdingRatioSource: previousInputs.holdingRatioSource || "appa_default_100",
     machineMasterName: previousInputs.machineMasterName || machineSpec?.name || null,
