@@ -3,7 +3,7 @@
 const $ = (selector) => document.querySelector(selector);
 const controls = ["enabled", "autoSave", "soundEnabled", "manualStoreName", "manualMachineName", "manualDai", "manualBusinessDate", "manualDiffBalls"];
 // 自動巡回の入力もpopupを閉じても保持する（settingsへ保存・復元）。
-const crawlControls = ["crawlDn", "crawlDtdd", "crawlGraph", "crawlHistory", "crawlDetail", "crawlMinDelay", "crawlMaxDelay", "crawlDryRun"];
+const crawlControls = ["crawlDn", "crawlDtdd", "crawlGraph", "crawlHistory", "crawlDetail", "crawlMinDelay", "crawlMaxDelay", "crawlDryRun", "exchangeRateOverride"];
 let lastInspection = null;
 let lastPageDebug = null;
 let showPendingOnly = false;
@@ -56,7 +56,7 @@ function populatePayoutSelects(name) {
     select.value = value != null && value !== "" ? String(value) : "";
   };
   if (auto.tooMany) {
-    note.textContent = "この機種は当り種類が4種以上のため推定対象外です（生データのみ）。";
+    note.textContent = "この機種は当り種類が4種以上のため、Site7の超/中/小へ確実に対応できず推定対象外です。";
     fill($("#payoutCho"), ""); fill($("#payoutChu"), ""); fill($("#payoutSho"), "");
     $("#payoutCho").disabled = $("#payoutChu").disabled = $("#payoutSho").disabled = true;
   } else {
@@ -261,6 +261,7 @@ function applySettings(settings) {
   // 機種指定・出玉補正・超中小マッピングの復元
   $("#crawlMachine").value = settings.crawlMachine || "";
   $("#payoutAdjust").value = settings.payoutAdjustPercent ?? 0;
+  $("#exchangeRateOverride").value = settings.exchangeRateOverride ?? "";
   populatePayoutSelects($("#crawlMachine").value);
 }
 
@@ -284,6 +285,7 @@ function collectSettings() {
     crawlDryRun: $("#crawlDryRun").checked,
     crawlMachine: $("#crawlMachine").value,
     payoutAdjustPercent: Number($("#payoutAdjust").value) || 0,
+    exchangeRateOverride: Number($("#exchangeRateOverride").value) > 0 ? Number($("#exchangeRateOverride").value) : null,
     payoutMapOverrides: payoutOverrides
   };
 }

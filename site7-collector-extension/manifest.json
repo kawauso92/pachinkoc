@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Site7 Collector Prototype",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "閲覧中のサイトセブン台データを台番号・営業日単位でローカル保存します。",
   "permissions": ["storage", "downloads", "activeTab", "tabs", "declarativeNetRequest"],
   "declarative_net_request": {
