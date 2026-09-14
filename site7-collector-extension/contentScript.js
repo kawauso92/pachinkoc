@@ -721,7 +721,16 @@
     }
     state.lastSavePayload = structuredClone(records);
     const results = [];
-    for (const record of records) results.push(await send({ type: "SAVE_CAPTURE", record }));
+    for (const record of records) {
+      const result = await send({ type: "SAVE_CAPTURE", record });
+      if (!result?.ok) {
+        const error = result?.error || "保存結果を確認できませんでした";
+        showToast(`❌ 保存失敗\n${error}`, "error");
+        notifySound("error");
+        return { ok: false, error, records, results };
+      }
+      results.push(result);
+    }
     state.saveCount += results.filter((result) => result.status !== "unchanged").length;
     await inspectAndRender();
     const pending = results.filter((result) => result.status?.startsWith("pending")).length;
@@ -961,7 +970,9 @@
       .map((row) => ({ no: row.no, payout: row.payout }));
     const payoutExcludedRows = rows.filter((row) => !payoutIncludedRows.some((included) => included.no === row.no))
       .map((row) => ({ no: row.no, payout: row.payout, reason: !Number.isInteger(row.no) ? "non_jackpot_row" : "non_numeric_payout" }));
-    return { payoutTotal: payoutIncludedRows.reduce((sum, row) => sum + row.payout, 0), payoutIncludedRows, payoutExcludedRows };
+    const hitCount = rows.filter(row => Number.isInteger(row.no) && row.no >= 1).length;
+    return { payoutTotal: payoutIncludedRows.length && payoutIncludedRows.length === hitCount
+      ? payoutIncludedRows.reduce((sum, row) => sum + row.payout, 0) : null, payoutIncludedRows, payoutExcludedRows };
   }
 
   function findHistoryTable(root) {
@@ -1632,7 +1643,8 @@
       bar.id = "site7-collector-status";
       document.documentElement.appendChild(bar);
     }
-    const symbols = [inspection.detectedParts.summary, inspection.detectedParts.history, inspection.detectedParts.graph].map((found) => found ? "✅" : "❌");
+    // These indicators describe the DOM, not a successful storage write.
+    const symbols = [inspection.detectedParts.summary, inspection.detectedParts.history, inspection.detectedParts.graph].map((found) => found ? "検出" : "未検出");
     const daiCandidates = [...new Set(inspection.detectedDaiCandidates.filter((candidate) => candidate.activeViewport || candidate.reason === "url_dn").map((candidate) => candidate.value))].join(" / ") || "なし";
     const dateCandidates = [...new Set(inspection.detectedDateCandidates.map((candidate) => candidate.label))].join(" / ") || "なし";
     bar.innerHTML = `<strong>Site7 Collector ON${inspection.contextLocked ? " / CONTEXT LOCKED" : ""}</strong>台番: ${escapeHtml(inspection.dai)} ${inspection.daiConfidence}（${escapeHtml(inspection.selectedDaiReason)}）\n候補: ${escapeHtml(daiCandidates)}\n機種: ${escapeHtml(inspection.machineName)}（${escapeHtml(inspection.selectedMachineReason)}）\n日付: ${escapeHtml(inspection.businessDate)} ${inspection.dateConfidence}（${escapeHtml(inspection.selectedBusinessDateReason)}）\n候補: ${escapeHtml(dateCandidates)}\n画面: ${escapeHtml(inspection.screenType)} ${inspection.screenTypeConfidence}（${escapeHtml(inspection.selectedScreenTypeReason)}）\nsummary ${symbols[0]} history ${symbols[1]} graph ${symbols[2]} / 取得済み ${state.saveCount}件`;
@@ -1679,7 +1691,7 @@
     state.autoSaveInFlight = false;
     const graph = result?.records?.[0]?.parts?.graph;
     const graphNeedsRetry = inspection.screenType === "graph" && (!graph || graph.status !== "captured" || !Number.isFinite(graph.diffBallsFinal));
-    if (!result || result.skipped || graphNeedsRetry) {
+    if (!result?.ok || result.skipped || graphNeedsRetry) {
       if (inspection.screenType === "graph" && state.autoAttemptCount < 4) {
         state.lastAutoSignature = "";
         state.autoAttemptCount += 1;

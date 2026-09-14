@@ -20,6 +20,11 @@ async function initialize() {
   payoutOverrides = settingsResponse.settings?.payoutMapOverrides || {};
   applySettings(settingsResponse.settings || {});
   await Promise.all([refreshPageState(), refreshRecords(), restoreCrawlState()]);
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && (changes.site7RecordsV1 || changes.site7PendingV1)) {
+      refreshRecords().catch(error => setMessage(error.message, "bad"));
+    }
+  });
 }
 
 // 機種一覧を取得して機種プルダウンを作る。
@@ -42,6 +47,10 @@ function populatePayoutSelects(name) {
   const machine = machineByName(name);
   const override = payoutOverrides[name] || {};
   const auto = machine?.auto || {};
+  $("#singleHitType").checked = Boolean(override.singleType);
+  $("#singleHitType").disabled = !name;
+  $("#singleHitBalls").value = override.singleBalls ?? "";
+  $("#singleHitBalls").disabled = !name || !override.singleType;
   const note = $("#payoutMapNote");
   const fill = (select, value) => {
     if (!machine || !machine.breakdown.length) {
@@ -78,7 +87,7 @@ function onPayoutMapChange() {
   const name = $("#crawlMachine").value;
   if (!name) return;
   const num = (id) => { const value = $(id).value; return value === "" ? null : Number(value); };
-  payoutOverrides[name] = { cho: num("#payoutCho"), chu: num("#payoutChu"), sho: num("#payoutSho") };
+  payoutOverrides[name] = { ...payoutOverrides[name], cho: num("#payoutCho"), chu: num("#payoutChu"), sho: num("#payoutSho") };
   saveSettings();
 }
 
@@ -114,6 +123,15 @@ function bindEvents() {
   $("#crawlMachine").addEventListener("change", onMachineChange);
   for (const id of ["payoutCho", "payoutChu", "payoutSho"]) $("#" + id).addEventListener("change", onPayoutMapChange);
   $("#payoutAdjust").addEventListener("change", saveSettings);
+  for (const id of ["singleHitType", "singleHitBalls"]) $("#" + id).addEventListener("change", () => {
+    const name = $("#crawlMachine").value;
+    if (!name) return;
+    const balls = Number($("#singleHitBalls").value);
+    payoutOverrides[name] = { ...payoutOverrides[name], singleType: $("#singleHitType").checked,
+      singleBalls: Number.isInteger(balls) && balls > 0 ? balls : null };
+    $("#singleHitBalls").disabled = !$("#singleHitType").checked;
+    saveSettings();
+  });
 }
 
 let crawlPoll = null;
@@ -223,6 +241,8 @@ function renderCrawl(status) {
     setCrawlStatus(`混雑のため退避中… あと約${remain}秒で再試行（現在: ${current}）`, "warn");
   } else if (!status.running && status.stoppedReason === "busy_limit") {
     setCrawlStatus(`混雑が続いたため停止しました ${status.done}/${status.total}。時間を空けて再開してください`, "bad");
+  } else if (!status.running && status.stoppedReason === "capture_failed") {
+    setCrawlStatus(`取得・保存に失敗したため停止しました ${status.done}/${status.total}。下のエラーを確認してください`, "bad");
   } else if (!status.running && status.stoppedReason === "user_stop") {
     setCrawlStatus(`停止しました ${status.done}/${status.total}`, "warn");
   } else {
@@ -429,12 +449,8 @@ async function exportData(format, scope, filter = {}) {
     const response = await chrome.runtime.sendMessage({ type: "EXPORT_DATA", format, scope, businessDate: filter.businessDate || "", machineKey: filter.machineKey || "" });
     if (!response.ok) throw new Error(response.error);
     const label = format === "debugCsv" ? "デバッグCSV" : format.toUpperCase();
-    setMessage(`${label}を書き出しました（${response.count}件）${response.archivedAt ? "／今回分を過去データへ移しました" : ""}`, "ok");
-    if (response.archivedAt) {
-      const tab = await activeTab();
-      if (tab?.id) chrome.tabs.sendMessage(tab.id, { type: "SESSION_ARCHIVED" }).catch(() => {});
-      await refreshRecords();
-    }
+    setMessage(`${label}の保存を開始しました（${response.count}件）${response.cleanupScheduled ? "／ダウンロード完了後、出力した保存データを削除します" : ""}`, "ok");
+    await refreshRecords();
   } catch (error) { setMessage(error.message, "bad"); }
 }
 

@@ -25,3 +25,4 @@ __pycache__/
 /scripts/pscube_dom_probe.py
 /scripts/pscube_multiday_probe.py
 /scripts/pscube_stealth_probe.py
+/data/site7/recovery-*/

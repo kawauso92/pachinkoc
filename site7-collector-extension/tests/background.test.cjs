@@ -12,6 +12,7 @@ function loadBackground() {
     globalThis.__testExports = {
       applyAppaCalculations,
       applyMasterData,
+      flattenRecord,
       autoMapHitPayout,
       findShopRate,
       normalizePayoutBreakdown,
@@ -43,6 +44,46 @@ function loadBackground() {
 }
 
 const background = loadBackground();
+
+test("内訳も履歴出玉もない店で、31回×指定1400玉から払出を推定する", () => {
+  const record = { machineName: "test", parts: {
+    summary: { jackpot: 31, normalStarts: 2000 },
+    history: { status: "captured", rows: Array.from({ length: 31 }, (_, i) => ({ no: i + 1, payout: null })) },
+    graph: { diffBallsFinal: 10000 }
+  } };
+  const result = background.applyMasterData(record, null, null, { overrides: { test: { singleType: true, singleBalls: 1400 } } });
+  assert.equal(result.parts.history.payoutTotal, null);
+  assert.equal(result.parts.calculation.effectivePayoutTotal, 43400);
+  assert.equal(result.parts.calculation.estimatedUsedBalls, 33400);
+  assert.equal(result.parts.calculation.payoutMethod, "single_hit_count");
+  assert.equal(background.flattenRecord(result, true).payoutTotal, 43400);
+});
+
+test("1種類設定は補正率を適用し、実測出玉があれば実測を優先する", () => {
+  const make = () => ({ machineName: "test", parts: { summary: { jackpot: 1 }, history: {}, graph: {} } });
+  const config = { adjustPercent: -1, overrides: { test: { singleType: true, singleBalls: 1400 } } };
+  const estimated = background.applyMasterData(make(), null, null, config);
+  assert.equal(estimated.parts.calculation.effectivePayoutTotal, 1386);
+  const measured = make();
+  measured.parts.history.rows = [{ no: 1, payout: 1300 }];
+  assert.equal(background.applyMasterData(measured, null, null, config).parts.calculation.effectivePayoutTotal, 1300);
+});
+
+test("未入力・当たり回数不明・設定OFFでは単一出玉を推定しない", () => {
+  for (const [jackpot, enabled, balls] of [[31, true, null], [null, true, 1400], [31, false, 1400]]) {
+    const result = background.applyMasterData({ machineName: "test", parts: { summary: { jackpot }, history: {}, graph: {} } }, null, null,
+      { overrides: { test: { singleType: enabled, singleBalls: balls } } });
+    assert.equal(result.parts.calculation.effectivePayoutTotal, null);
+  }
+});
+
+test("一部だけ出玉がある履歴も全額実測とは扱わず、通常回転不明は補完しない", () => {
+  const result = background.applyMasterData({ machineName: "test", parts: { summary: { jackpot: 2 },
+    history: { rows: [{ no: 1, payout: 1400 }, { no: 2, payout: null }] }, graph: { diffBallsFinal: 1000 } } }, null, null,
+    { overrides: { test: { singleType: true, singleBalls: 1400 } } });
+  assert.equal(result.parts.calculation.effectivePayoutTotal, 2800);
+  assert.equal(result.parts.calculation.rotationRate, null);
+});
 
 test("交換率上書きは正の数だけを採用する", () => {
   assert.equal(background.positiveNumberOrNull("27.5"), 27.5);

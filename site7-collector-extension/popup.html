@@ -43,6 +43,9 @@
       <label>出玉補正(%)<input type="number" id="payoutAdjust" value="0" min="-30" max="30" step="0.5"></label>
     </div>
     <p id="payoutMapNote" class="hint"></p>
+    <label><input type="checkbox" id="singleHitType">当たりは1種類（超・中・小の表示がない店）</label>
+    <label>1回あたりの出玉（玉）<input type="number" id="singleHitBalls" min="1" step="1" placeholder="1回の払出玉数を入力" disabled></label>
+    <p class="hint">上で機種を選択して指定します。大当たり回数×入力した出玉×出玉補正で推定し、CSVに推定と記載します。</p>
     <div class="checks">
       <label><input type="checkbox" id="crawlGraph" checked>出玉推移</label>
       <label><input type="checkbox" id="crawlHistory" checked>大当り履歴</label>
@@ -123,12 +126,12 @@
     <p class="hint">保存データから日付・機種で絞って出力します。機種はマスター解決後の名前でまとめ（未対応は「未解決」）。</p>
     <label>日付<select id="filterDate"><option value="">すべて</option></select></label>
     <label>機種<select id="filterMachine"><option value="">すべて</option></select></label>
-    <button id="exportFilteredCsv" class="primary">この条件でCSV出力</button>
+    <button id="exportFilteredCsv" class="primary">この条件でCSV出力・完了後削除</button>
   </section>
 
   <!-- 書き出し・管理 -->
   <footer>
-    <button id="exportSessionCsv">今回データCSV</button>
+    <button id="exportSessionCsv">今回データCSV・完了後削除</button>
     <button id="exportDebugCsv">デバッグCSV</button>
     <button id="exportJson">JSON（全量バックアップ）</button>
     <button id="copyDebug">デバッグ情報コピー</button>

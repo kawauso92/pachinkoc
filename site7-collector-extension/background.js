@@ -6,7 +6,8 @@ const STORAGE_KEYS = {
   settings: "site7SettingsV1",
   session: "site7SessionV1",
   appaMasters: "site7AppaMastersV1",
-  kishuBreakdowns: "site7KishuBreakdownsV1"
+  kishuBreakdowns: "site7KishuBreakdownsV1",
+  exportJobs: "site7ExportJobsV1"
 };
 
 const APPA_MASTERS_URL = "https://script.google.com/macros/s/AKfycbzFtMJ354oeVAeNVTGLckNVXX9I1URLJTrlMTafDNO6UPOf7yo3bnaac_yPKYV8hVv8/exec?action=masters";
@@ -58,6 +59,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     .then(sendResponse)
     .catch((error) => sendResponse({ ok: false, error: error.message }));
   return true;
+});
+
+// Persist cleanup jobs across service-worker restarts in the current browser session.
+chrome.downloads?.onChanged?.addListener((delta) => {
+  if (delta.state?.current === "complete" || delta.state?.current === "interrupted") {
+    finishCsvExport(delta.id).catch(console.error);
+  }
 });
 
 // ----- Auto-crawl controller -------------------------------------------------
@@ -210,6 +218,12 @@ async function runCrawl(runId) {
       throwIfCrawlStopped(runId);
       const response = await captureViaContentScript(crawlState.tabId, settings, runId);
       throwIfCrawlStopped(runId);
+      if (!response?.ok) {
+        crawlState.results.push({ dn: step.dn, dtdd: step.dtdd, screen: step.screen,
+          ok: false, status: "error", error: response?.error || "取得・保存に失敗しました" });
+        crawlState.stoppedReason = "capture_failed";
+        break;
+      }
       busy = Boolean(response?.busy);
       if (busy) {
         crawlState.results.push({ dn: step.dn, dtdd: step.dtdd, screen: step.screen, ok: false, status: "busy" });
@@ -910,7 +924,20 @@ function prepareIncomingRecord(existing, incoming) {
   };
 }
 
-async function saveCapture(incoming) {
+let saveQueue = Promise.resolve();
+function saveCapture(incoming) {
+  // Serialize read/modify/write so concurrent auto/manual captures cannot erase rows.
+  const task = saveQueue.then(() => saveCaptureImpl(incoming));
+  saveQueue = task.catch(() => {});
+  return task.catch((error) => {
+    if (/quota|QUOTA_BYTES/i.test(error.message)) {
+      throw new Error("保存容量の上限に達しました。保存できていません。保存データを通常CSVへ出力して空き容量を確保してください。");
+    }
+    throw error;
+  });
+}
+
+async function saveCaptureImpl(incoming) {
   if (!incoming || typeof incoming !== "object") throw new Error("Capture data is missing");
   // 巡回で機種を指定している場合は、全台をその機種名(appa/appb名)で固定する。
   // これで表記ゆれ店でもスペック・内訳が確実に解決する。
@@ -932,7 +959,11 @@ async function saveCapture(incoming) {
   let existing = null;
   for (const [, record] of matchingRecordEntries) existing = combineStoredRecords(existing, record);
   const masters = await getAppaMasters().catch(() => null);
-  const prepared = applyMasterData(prepareIncomingRecord(existing, incoming), masters);
+  const settings = (await getSettings()).settings;
+  const prepared = applyMasterData(prepareIncomingRecord(existing, incoming), masters, null, {
+    overrides: settings.payoutMapOverrides || {}, adjustPercent: Number(settings.payoutAdjustPercent) || 0,
+    exchangeRate: positiveNumberOrNull(settings.exchangeRateOverride)
+  });
 
   if (!canMerge(prepared)) {
     const signature = pendingSignature(prepared);
@@ -1072,7 +1103,8 @@ function payoutTotalsFromRows(rows) {
   const included = (rows || []).filter((row) => Number.isInteger(row.no) && row.no >= 1 && typeof row.payout === "number" && Number.isFinite(row.payout))
     .map((row) => ({ no: row.no, payout: row.payout }));
   return {
-    payoutTotal: included.reduce((sum, row) => sum + row.payout, 0),
+    payoutTotal: included.length && included.length === (rows || []).filter(row => Number.isInteger(row.no) && row.no >= 1).length
+      ? included.reduce((sum, row) => sum + row.payout, 0) : null,
     payoutIncludedRows: included,
     payoutExcludedRows: (rows || []).filter((row) => !included.some((item) => item.no === row.no))
       .map((row) => ({ no: row.no, payout: row.payout, reason: !Number.isInteger(row.no) ? "non_jackpot_row" : "non_numeric_payout" }))
@@ -1179,8 +1211,14 @@ function applyCalculations(record) {
   // 払出が取れない店向け: 超中小の回数 × 内訳出玉(自動/上書き) × 補正% から払出を推定する。
   // 実測payoutがある台は推定しない（実測優先）。4種以上(tooMany)は推定対象外。
   const hitMap = record.calculationInputs?.hitPayoutMap || record.parts?.calculation?.inputs?.hitPayoutMap;
+  const singleHit = record.calculationInputs?.singleHitPayout;
   let estimatedPayoutTotal = null;
-  if (!isFiniteNumber(payoutTotal) && hitMap && !hitMap.tooMany) {
+  let payoutMethod = null;
+  if (!isFiniteNumber(payoutTotal) && singleHit?.enabled && positiveNumberOrNull(singleHit.balls)
+      && Number.isInteger(summary.jackpot) && summary.jackpot >= 0) {
+    estimatedPayoutTotal = Math.round(summary.jackpot * singleHit.balls * (1 + (Number(record.calculationInputs?.payoutAdjustPercent) || 0) / 100));
+    payoutMethod = "single_hit_count";
+  } else if (!isFiniteNumber(payoutTotal) && !singleHit?.enabled && hitMap && !hitMap.tooMany) {
     const counts = [summary.choCount, summary.chuCount, summary.shoCount];
     const payouts = [hitMap.cho, hitMap.chu, hitMap.sho];
     const mapCompleteForObservedHits = counts.every((count, index) => !isFiniteNumber(count) || count <= 0 || isFiniteNumber(payouts[index]));
@@ -1190,6 +1228,7 @@ function applyCalculations(record) {
         + (Number(summary.chuCount) || 0) * (Number(hitMap.chu) || 0)
         + (Number(summary.shoCount) || 0) * (Number(hitMap.sho) || 0);
       estimatedPayoutTotal = Math.round(sum * adjust);
+      payoutMethod = "hit_breakdown";
     }
   }
   const effectivePayout = isFiniteNumber(payoutTotal) ? payoutTotal : estimatedPayoutTotal;
@@ -1204,6 +1243,9 @@ function applyCalculations(record) {
   const historyHitCount = (history?.rows || []).filter((row) => Number.isInteger(row.no) && row.no >= 1).length;
   const historyMismatch = history?.status === "captured" && isFiniteNumber(jackpot) && historyHitCount !== jackpot;
   const calculation = { ...(record.parts?.calculation || {}) };
+  calculation.effectivePayoutTotal = effectivePayout ?? null;
+  calculation.payoutEstimated = payoutEstimated;
+  calculation.payoutMethod = isFiniteNumber(payoutTotal) ? "history" : payoutMethod;
   const reasons = [];
   const assumptionsPre = [];
   // 稼働0（総回転0）は未稼働として扱う。
@@ -1312,6 +1354,7 @@ function applyMasterData(record, masters, breakdowns = null, payoutConfig = {}) 
   const previousInputs = record.calculationInputs || record.parts?.calculation?.inputs || {};
   // 出玉内訳(超中小→出玉)マッピング。解決後のappa名、無ければ既にappa名で入っているmachineNameで引く。
   const breakdownKey = machineSpec?.name || record.machineName;
+  const singleOverride = payoutConfig?.overrides?.[breakdownKey];
   let hitPayoutMap = null;
   if (breakdowns && breakdownKey) {
     const auto = autoMapHitPayout(breakdowns[breakdownKey]);
@@ -1338,6 +1381,9 @@ function applyMasterData(record, masters, breakdowns = null, payoutConfig = {}) 
     machineMasterName: previousInputs.machineMasterName || machineSpec?.name || null,
     shopMasterName: previousInputs.shopMasterName || shop?.name || null,
     hitPayoutMap: hitPayoutMap || previousInputs.hitPayoutMap || null,
+    singleHitPayout: singleOverride && Object.prototype.hasOwnProperty.call(singleOverride, "singleType")
+      ? { enabled: Boolean(singleOverride.singleType), balls: positiveNumberOrNull(singleOverride.singleBalls) }
+      : (previousInputs.singleHitPayout || null),
     payoutAdjustPercent: Number(payoutConfig?.adjustPercent) || 0,
     mastersSource: APPA_MASTERS_URL
   };
@@ -1436,6 +1482,21 @@ async function exportData(format, scope = "all", filter = {}) {
     return true;
   };
   const selectedRecords = [...records, ...pending].filter(matches);
+  // Snapshot raw stored values before opening the Save dialog. Never delete a
+  // record updated while that dialog or the download is in progress.
+  const raw = await chrome.storage.local.get([STORAGE_KEYS.records, STORAGE_KEYS.pending]);
+  const exportedVersions = [];
+  if (format === "csv") {
+    for (const record of selectedRecords) {
+      const kind = pending.includes(record) ? "pending" : "records";
+      const entry = kind === "pending"
+        ? (raw[STORAGE_KEYS.pending] || []).find(r => r.pendingId === record.pendingId)
+        : Object.values(raw[STORAGE_KEYS.records] || {}).find(r => canonicalKey(r) === canonicalKey(record));
+      if (entry && entry.updatedAt === record.updatedAt && entry.captureDateTime === record.captureDateTime) {
+        exportedVersions.push({ kind, id: kind === "pending" ? entry.pendingId : canonicalKey(entry), hash: await recordHash(entry) });
+      }
+    }
+  }
   let content;
   let mime;
   let extension;
@@ -1471,12 +1532,58 @@ async function exportData(format, scope = "all", filter = {}) {
     filename: `site7-collector-${format === "debugCsv" ? "debug" : format}-${scope}${filterTag ? `-${filterTag}` : ""}-${stamp}.${extension}`,
     saveAs: true
   });
-  let archivedAt = null;
-  if (scope === "session" && selectedRecords.length > 0) {
-    archivedAt = new Date().toISOString();
-    await chrome.storage.session.set({ [STORAGE_KEYS.session]: { startedAt: archivedAt } });
+  if (format === "csv" && exportedVersions.length) {
+    await queueStorageWork(async () => {
+      const stored = await chrome.storage.session.get(STORAGE_KEYS.exportJobs);
+      const jobs = stored[STORAGE_KEYS.exportJobs] || {};
+      jobs[downloadId] = exportedVersions;
+      await chrome.storage.session.set({ [STORAGE_KEYS.exportJobs]: jobs });
+    });
+    // Covers downloads that finished before the cleanup job was registered.
+    await finishCsvExport(downloadId);
   }
-  return { ok: true, downloadId, count: selectedRecords.length, scope, archivedAt };
+  return { ok: true, downloadId, count: selectedRecords.length, scope, cleanupScheduled: format === "csv" && exportedVersions.length > 0 };
+}
+
+function queueStorageWork(work) {
+  const task = saveQueue.then(work);
+  saveQueue = task.catch(() => {});
+  return task;
+}
+
+async function recordHash(record) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(record)));
+  return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, "0")).join("");
+}
+
+function finishCsvExport(downloadId) {
+  return queueStorageWork(async () => {
+    const stored = await chrome.storage.session.get(STORAGE_KEYS.exportJobs);
+    const jobs = stored[STORAGE_KEYS.exportJobs] || {};
+    const versions = jobs[downloadId];
+    if (!versions) return;
+    const [download] = await chrome.downloads.search({ id: downloadId });
+    if (!download || !["complete", "interrupted"].includes(download.state)) return;
+    if (download.state === "complete" && download.exists !== false) {
+      // A completed download is the durable copy. JSON/debug exports never reach here.
+      const data = await chrome.storage.local.get([STORAGE_KEYS.records, STORAGE_KEYS.pending]);
+      const records = data[STORAGE_KEYS.records] || {};
+      const pending = data[STORAGE_KEYS.pending] || [];
+      const hashes = new Map(versions.map(v => [`${v.kind}|${v.id}`, v.hash]));
+      for (const [key, record] of Object.entries(records)) {
+        const hash = hashes.get(`records|${canonicalKey(record)}`);
+        if (hash && hash === await recordHash(record)) delete records[key];
+      }
+      const keptPending = [];
+      for (const record of pending) {
+        const hash = hashes.get(`pending|${record.pendingId}`);
+        if (!hash || hash !== await recordHash(record)) keptPending.push(record);
+      }
+      await chrome.storage.local.set({ [STORAGE_KEYS.records]: records, [STORAGE_KEYS.pending]: keptPending });
+    }
+    delete jobs[downloadId];
+    await chrome.storage.session.set({ [STORAGE_KEYS.exportJobs]: jobs });
+  });
 }
 
 const DEBUG_CSV_COLUMNS = [
@@ -1512,7 +1619,8 @@ function flattenRecord(record, spreadsheet = false) {
   if (Number.isFinite(summary.yutimeDeductStarts) && summary.yutimeDeductStarts > 0) {
     notes.push(`遊タイム控除: 通常${summary.normalStartsRaw}->${summary.normalStarts} (-${summary.yutimeDeductStarts})`);
   }
-  if (calculation.rotationRateEstimated) notes.push("回転率は推定値(精度低・超中小×内訳出玉)");
+  if (calculation.payoutMethod === "single_hit_count") notes.push(`払出は推定値: 大当たり${summary.jackpot}回×1回${record.calculationInputs?.singleHitPayout?.balls}玉（出玉補正${record.calculationInputs?.payoutAdjustPercent || 0}%）`);
+  if (calculation.rotationRateEstimated) notes.push(calculation.payoutMethod === "single_hit_count" ? "回転率は推定払出を使用" : "回転率は推定値(精度低・超中小×内訳出玉)");
   if (isFiniteNumber(graph.diffBallsFinal) && Math.abs(graph.diffBallsFinal) > GRAPH_DIFF_RELIABLE_LIMIT) {
     notes.push(`差玉±${GRAPH_DIFF_RELIABLE_LIMIT}超過: グラフ範囲外の可能性あり（差玉・推定使用玉・回転率・期待時給・仕事量は要確認）`);
   }
@@ -1544,9 +1652,7 @@ function flattenRecord(record, spreadsheet = false) {
     chuCount: summary.chuCount,
     shoCount: summary.shoCount,
     historyRowCount: history.rows?.length || 0,
-    payoutTotal: Number.isFinite(history.payoutTotal) ? history.payoutTotal : (history.rows || [])
-      .filter((item) => Number.isInteger(item.no) && item.no >= 1 && typeof item.payout === "number" && Number.isFinite(item.payout))
-      .reduce((sum, item) => sum + item.payout, 0),
+    payoutTotal: calculation.effectivePayoutTotal ?? history.payoutTotal ?? null,
     diffBallsRaw: graph.diffBallsRaw,
     diffBallsCandidate: graph.diffBallsCandidate,
     diffBallsFinal: spreadsheet && Number.isFinite(graph.diffBallsFinal) ? Math.round(graph.diffBallsFinal) : graph.diffBallsFinal,
