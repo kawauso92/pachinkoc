@@ -115,6 +115,8 @@ function bindEvents() {
   $("#exportFilteredCsv").addEventListener("click", exportFilteredCsv);
   $("#exportDebugCsv").addEventListener("click", () => exportData("debugCsv", "all"));
   $("#exportJson").addEventListener("click", () => exportData("json", "all"));
+  $("#exportSupplementJson").addEventListener("click", () => exportData("json", "all"));
+  $("#crawlMode").addEventListener("change", () => { updateCrawlMode(); saveSettings(); });
   $("#copyDebug").addEventListener("click", copyDebug);
   $("#clearData").addEventListener("click", clearData);
   $("#pendingOnly").addEventListener("click", async () => {
@@ -151,6 +153,8 @@ function bindEvents() {
 let crawlPoll = null;
 
 function crawlScreens() {
+  const mode = $("#crawlMode").value;
+  if (["history", "graph", "detail"].includes(mode)) return [mode];
   const historyRequired = Boolean(payoutOverrides[$("#crawlMachine").value]?.historyNormalEnabled);
   return [
     $("#crawlGraph").checked && "graph",
@@ -159,7 +163,15 @@ function crawlScreens() {
   ].filter(Boolean);
 }
 
+function updateCrawlMode() {
+  const mode = $("#crawlMode").value;
+  for (const [id, screen] of [["crawlGraph", "graph"], ["crawlHistory", "history"], ["crawlDetail", "detail"]]) {
+    $("#" + id).disabled = mode !== "custom";
+  }
+}
+
 async function startCrawl() {
+  await saveSettings();
   const tab = await activeTab();
   if (!tab?.id || !/^https:\/\/([^/]+\.)?site777\.jp\/.*D2600\.do/i.test(tab.url || "")) {
     setCrawlStatus("出玉推移ページ（…/D2600.do）を開いてから開始してください（他ページはパラメータが異なりエラーになります）", "bad");
@@ -293,6 +305,8 @@ function applySettings(settings) {
   $("#crawlMinDelay").value = settings.crawlMinDelay ?? 2000;
   $("#crawlMaxDelay").value = settings.crawlMaxDelay ?? 5000;
   $("#crawlDryRun").checked = Boolean(settings.crawlDryRun);
+  $("#crawlMode").value = settings.crawlMode || "custom";
+  updateCrawlMode();
   // 機種指定・出玉補正・超中小マッピングの復元
   $("#crawlMachine").value = settings.crawlMachine || "";
   $("#payoutAdjust").value = settings.payoutAdjustPercent ?? 0;
@@ -311,6 +325,7 @@ function collectSettings() {
     manualBusinessDate: $("#manualBusinessDate").value,
     manualDiffBalls: $("#manualDiffBalls").value.trim(),
     crawlDn: $("#crawlDn").value.trim(),
+    crawlMode: $("#crawlMode").value,
     crawlDtdd: $("#crawlDtdd").value.trim(),
     crawlGraph: $("#crawlGraph").checked,
     crawlHistory: $("#crawlHistory").checked,
@@ -460,6 +475,10 @@ function populateExportFilters(allRecords) {
 }
 
 async function exportData(format, scope, filter = {}) {
+  if (format === "csv" && $("#crawlMode").value === "history") {
+    setMessage("履歴の追加取得は「追加取得データJSON」を使ってください。通常CSVには各当たりの回転数が含まれません。", "bad");
+    return;
+  }
   try {
     const response = await chrome.runtime.sendMessage({ type: "EXPORT_DATA", format, scope, businessDate: filter.businessDate || "", machineKey: filter.machineKey || "" });
     if (!response.ok) throw new Error(response.error);
