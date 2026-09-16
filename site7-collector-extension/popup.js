@@ -51,6 +51,10 @@ function populatePayoutSelects(name) {
   $("#singleHitType").disabled = !name;
   $("#singleHitBalls").value = override.singleBalls ?? "";
   $("#singleHitBalls").disabled = !name || !override.singleType;
+  $("#historyNormalEnabled").checked = Boolean(override.historyNormalEnabled);
+  $("#historyNormalEnabled").disabled = !name;
+  $("#historyShortSpins").value = override.historyShortSpins ?? 100;
+  $("#historyShortSpins").disabled = !name || !override.historyNormalEnabled;
   const note = $("#payoutMapNote");
   const fill = (select, value) => {
     if (!machine || !machine.breakdown.length) {
@@ -123,6 +127,16 @@ function bindEvents() {
   $("#crawlMachine").addEventListener("change", onMachineChange);
   for (const id of ["payoutCho", "payoutChu", "payoutSho"]) $("#" + id).addEventListener("change", onPayoutMapChange);
   $("#payoutAdjust").addEventListener("change", saveSettings);
+  for (const id of ["historyNormalEnabled", "historyShortSpins"]) $("#" + id).addEventListener("change", () => {
+    const name = $("#crawlMachine").value;
+    if (!name) return;
+    const value = $("#historyShortSpins").value;
+    const spins = value === "" ? null : Number(value);
+    payoutOverrides[name] = { ...payoutOverrides[name], historyNormalEnabled: $("#historyNormalEnabled").checked,
+      historyShortSpins: Number.isInteger(spins) && spins >= 0 ? spins : null };
+    $("#historyShortSpins").disabled = !$("#historyNormalEnabled").checked;
+    saveSettings();
+  });
   for (const id of ["singleHitType", "singleHitBalls"]) $("#" + id).addEventListener("change", () => {
     const name = $("#crawlMachine").value;
     if (!name) return;
@@ -137,9 +151,10 @@ function bindEvents() {
 let crawlPoll = null;
 
 function crawlScreens() {
+  const historyRequired = Boolean(payoutOverrides[$("#crawlMachine").value]?.historyNormalEnabled);
   return [
     $("#crawlGraph").checked && "graph",
-    $("#crawlHistory").checked && "history",
+    ($("#crawlHistory").checked || historyRequired) && "history",
     $("#crawlDetail").checked && "detail"
   ].filter(Boolean);
 }

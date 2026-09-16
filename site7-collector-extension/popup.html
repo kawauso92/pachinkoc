@@ -46,6 +46,9 @@
     <label><input type="checkbox" id="singleHitType">当たりは1種類（超・中・小の表示がない店）</label>
     <label>1回あたりの出玉（玉）<input type="number" id="singleHitBalls" min="1" step="1" placeholder="1回の払出玉数を入力" disabled></label>
     <p class="hint">上で機種を選択して指定します。大当たり回数×入力した出玉×出玉補正で推定し、CSVに推定と記載します。</p>
+    <label><input type="checkbox" id="historyNormalEnabled">通常回転が不明なら履歴から計算（初回は全回転）</label>
+    <label>2回目以降に差し引く時短回数<input type="number" id="historyShortSpins" min="0" step="1" value="100" disabled></label>
+    <p class="hint">最終当たり後の現在スタートからも時短分を引きます。全当たりの履歴が揃う場合だけ計算します。</p>
     <div class="checks">
       <label><input type="checkbox" id="crawlGraph" checked>出玉推移</label>
       <label><input type="checkbox" id="crawlHistory" checked>大当り履歴</label>

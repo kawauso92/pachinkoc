@@ -936,19 +936,19 @@
     const dataRows = [];
     for (const row of rows.slice(headerRowIndex + 1)) {
       const cells = rowCells(row);
-      if (cells.length !== headerCells.length || cells.length < 4) continue;
+      if (cells.length !== headerCells.length || cells.length < 2) continue;
       const get = (index) => index >= 0 && cells[index] ? clean(cells[index].textContent) : "";
       const noRaw = get(indexes.no >= 0 ? indexes.no : 0);
       const no = parseHistoryCell(noRaw);
       if (no === null || no === "" || (typeof no !== "number" && no !== "-")) continue;
-      const payoutRaw = get(indexes.payout >= 0 ? indexes.payout : cells.length - 1);
+      const payoutRaw = get(indexes.payout);
       const startRaw = get(indexes.start >= 0 ? indexes.start : 2);
       const chanceHit = isChanceHistoryRow(row, cells);
       const rawCells = cells.map((cell) => clean(cell.textContent));
       const yutime = isYutimeHistoryRow(noRaw, rawCells);
       dataRows.push({
         no,
-        time: get(indexes.time >= 0 ? indexes.time : 1) || null,
+        time: get(indexes.time) || null,
         start: parseHistoryCell(startRaw),
         payout: parseHistoryCell(payoutRaw),
         statusText: yutime ? "遊タイム" : (chanceHit ? "チャンス中大当り" : "通常"),
@@ -998,9 +998,7 @@
 
   function hasHistoryHeaders(headers) {
     return findHeader(headers, ["回数", "No", "番号"]) >= 0 &&
-      findHeader(headers, ["時刻", "時間"]) >= 0 &&
-      findHeader(headers, ["スタート", "回転"]) >= 0 &&
-      findHeader(headers, ["獲得数", "出玉", "払出"]) >= 0;
+      findHeader(headers, ["スタート", "回転"]) >= 0;
   }
 
   function parseHistoryCell(value) {

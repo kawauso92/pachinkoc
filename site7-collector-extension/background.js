@@ -1195,8 +1195,30 @@ function yutimeDeductStartsFromHistory(history) {
   }, 0);
 }
 
+function normalStartsFromHistory(record) {
+  const summary = record.parts?.summary || {};
+  if (isFiniteNumber(summary.normalStarts)) return { value: summary.normalStarts, method: "site" };
+  const config = record.calculationInputs?.historyNormal;
+  if (!config?.enabled) return { value: null };
+  const fail = reason => ({ value: null, method: "history_fixed_short", reason });
+  if (!Number.isInteger(config.spins) || config.spins < 0) return fail("shortSpinsMissing");
+  if (!Number.isInteger(summary.jackpot) || summary.jackpot < 0) return fail("jackpotCountMissing");
+  if (!Number.isInteger(summary.finalStarts) || summary.finalStarts < 0) return fail("finalStartsMissing");
+  const history = record.parts?.history;
+  if ((history?.rows || []).some(row => row.isYutime)) return fail("yutimeHistoryUnsupported");
+  const rows = (history?.rows || []).filter(row => Number.isInteger(row.no) && row.no >= 1).sort((a, b) => a.no - b.no);
+  if (rows.length !== summary.jackpot || (summary.jackpot > 0 && history?.status !== "captured") ||
+      rows.some((row, index) => row.no !== index + 1 || !Number.isInteger(row.start) || row.start < 0)) return fail("historyIncomplete");
+  const contributions = rows.map((row, index) => ({ no: row.no, start: row.start,
+    normal: index === 0 ? row.start : Math.max(0, row.start - config.spins) }));
+  const finalNormal = summary.jackpot === 0 ? summary.finalStarts : Math.max(0, summary.finalStarts - config.spins);
+  return { value: contributions.reduce((sum, row) => sum + row.normal, finalNormal), method: "history_fixed_short",
+    spins: config.spins, contributions, finalNormal };
+}
+
 function applyCalculations(record) {
-  const normalStarts = record.parts?.summary?.normalStarts;
+  const normalDerivation = normalStartsFromHistory(record);
+  const normalStarts = normalDerivation.value;
   // Derive the payout sum from the stored rows so a stale payoutTotal field can
   // never drive the calculation; fall back to the field only when rows are absent.
   const history = record.parts?.history;
@@ -1243,6 +1265,8 @@ function applyCalculations(record) {
   const historyHitCount = (history?.rows || []).filter((row) => Number.isInteger(row.no) && row.no >= 1).length;
   const historyMismatch = history?.status === "captured" && isFiniteNumber(jackpot) && historyHitCount !== jackpot;
   const calculation = { ...(record.parts?.calculation || {}) };
+  calculation.normalStarts = normalStarts;
+  calculation.normalStartsDerivation = normalDerivation;
   calculation.effectivePayoutTotal = effectivePayout ?? null;
   calculation.payoutEstimated = payoutEstimated;
   calculation.payoutMethod = isFiniteNumber(payoutTotal) ? "history" : payoutMethod;
@@ -1253,6 +1277,8 @@ function applyCalculations(record) {
     : (isFiniteNumber(normalStarts) && normalStarts === 0 && !isFiniteNumber(diffBallsFinal));
   calculation.idle = idle;
   if (!isFiniteNumber(normalStarts)) reasons.push("normalStartsMissing");
+  if (normalDerivation.reason) reasons.push(normalDerivation.reason);
+  if (normalDerivation.method === "history_fixed_short" && isFiniteNumber(normalStarts)) assumptionsPre.push("normalStartsDerivedFromHistory");
   if (!isFiniteNumber(effectivePayout)) reasons.push("payoutTotalMissing");
   if (!isFiniteNumber(diffBallsFinal)) reasons.push("diffBallsMissing");
   if (isFiniteNumber(diffBallsFinal) && Math.abs(diffBallsFinal) > GRAPH_DIFF_RELIABLE_LIMIT) assumptionsPre.push("diffGraphOutOfRange");
@@ -1307,7 +1333,7 @@ function applyAppaCalculations(record, calculation, reasons, assumptions) {
   const expectedHourlyRaw = zenki - koki;
   calculation.expectedHourly = Math.round(expectedHourlyRaw);
   calculation.expectedHourlyMethod = "appa_zenki_minus_koki";
-  calculation.expectedValue = Math.round(expectedHourlyRaw * (record.parts.summary.normalStarts / spec.jikan));
+  calculation.expectedValue = Math.round(expectedHourlyRaw * ((calculation.normalStarts ?? record.parts.summary.normalStarts) / spec.jikan));
   if (inputs.holdingRatioSource === "appa_default_100") assumptions.push("holdingRatioDefault100FromAppa");
 
   const cashInvestmentYen = Number(inputs.cashInvestmentYen);
@@ -1329,7 +1355,7 @@ function applyAppaCalculations(record, calculation, reasons, assumptions) {
   }
   if (todayHits === 0) {
     const border = spec.hatsua / (heikin * spec.heiren / 250);
-    calculation.workValue = Math.round((record.parts.summary.normalStarts / border * 250 * cashValuePerBall) + profit);
+    calculation.workValue = Math.round(((calculation.normalStarts ?? record.parts.summary.normalStarts) / border * 250 * cashValuePerBall) + profit);
     calculation.workValueMethod = "appa_no_hit_exact";
     return;
   }
@@ -1341,7 +1367,7 @@ function applyAppaCalculations(record, calculation, reasons, assumptions) {
     assumptions.push("workValueTheoreticalAllHolding");
     return;
   }
-  const theoreticalRounds = record.parts.summary.normalStarts / spec.total1R;
+  const theoreticalRounds = (calculation.normalStarts ?? record.parts.summary.normalStarts) / spec.total1R;
   const actualBallsPerRound = hitBalls / totalRounds;
   calculation.workValue = Math.round(profit - (totalRounds - theoreticalRounds) * actualBallsPerRound * cashValuePerBall);
   calculation.workValueMethod = "appa_hit_round_adjusted_exact";
@@ -1381,6 +1407,9 @@ function applyMasterData(record, masters, breakdowns = null, payoutConfig = {}) 
     machineMasterName: previousInputs.machineMasterName || machineSpec?.name || null,
     shopMasterName: previousInputs.shopMasterName || shop?.name || null,
     hitPayoutMap: hitPayoutMap || previousInputs.hitPayoutMap || null,
+    historyNormal: singleOverride && Object.prototype.hasOwnProperty.call(singleOverride, "historyNormalEnabled")
+      ? { enabled: Boolean(singleOverride.historyNormalEnabled), spins: singleOverride.historyShortSpins }
+      : (previousInputs.historyNormal || null),
     singleHitPayout: singleOverride && Object.prototype.hasOwnProperty.call(singleOverride, "singleType")
       ? { enabled: Boolean(singleOverride.singleType), balls: positiveNumberOrNull(singleOverride.singleBalls) }
       : (previousInputs.singleHitPayout || null),
@@ -1620,6 +1649,7 @@ function flattenRecord(record, spreadsheet = false) {
     notes.push(`遊タイム控除: 通常${summary.normalStartsRaw}->${summary.normalStarts} (-${summary.yutimeDeductStarts})`);
   }
   if (calculation.payoutMethod === "single_hit_count") notes.push(`払出は推定値: 大当たり${summary.jackpot}回×1回${record.calculationInputs?.singleHitPayout?.balls}玉（出玉補正${record.calculationInputs?.payoutAdjustPercent || 0}%）`);
+  if (calculation.normalStartsDerivation?.method === "history_fixed_short" && isFiniteNumber(calculation.normalStarts)) notes.push(`通常回転は履歴から計算: 初回全回転、2回目以降と現在スタートから時短${calculation.normalStartsDerivation.spins}回控除（各区間0以上）`);
   if (calculation.rotationRateEstimated) notes.push(calculation.payoutMethod === "single_hit_count" ? "回転率は推定払出を使用" : "回転率は推定値(精度低・超中小×内訳出玉)");
   if (isFiniteNumber(graph.diffBallsFinal) && Math.abs(graph.diffBallsFinal) > GRAPH_DIFF_RELIABLE_LIMIT) {
     notes.push(`差玉±${GRAPH_DIFF_RELIABLE_LIMIT}超過: グラフ範囲外の可能性あり（差玉・推定使用玉・回転率・期待時給・仕事量は要確認）`);
@@ -1644,7 +1674,7 @@ function flattenRecord(record, spreadsheet = false) {
     jackpot: summary.jackpot,
     initialHits: summary.initialHits,
     totalStarts: summary.totalStarts,
-    normalStarts: summary.normalStarts,
+    normalStarts: calculation.normalStarts ?? summary.normalStarts,
     chanceStarts: summary.chanceStarts,
     highestPayout: summary.highestPayout,
     finalStarts: summary.finalStarts,

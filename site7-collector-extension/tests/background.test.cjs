@@ -13,6 +13,7 @@ function loadBackground() {
       applyAppaCalculations,
       applyMasterData,
       flattenRecord,
+      normalStartsFromHistory,
       autoMapHitPayout,
       findShopRate,
       normalizePayoutBreakdown,
@@ -44,6 +45,56 @@ function loadBackground() {
 }
 
 const background = loadBackground();
+
+function historyNormalRecord(starts, finalStarts = 292) {
+  return { machineName: "test", calculationInputs: { historyNormal: { enabled: true, spins: 100 } }, parts: {
+    summary: { jackpot: starts.length, finalStarts },
+    history: { status: "captured", rows: starts.map((start, i) => ({ no: i + 1, start, payout: 1400 })).reverse() },
+    graph: { diffBallsFinal: 100 }
+  } };
+}
+
+test("通常回転は初回全数、以降100回控除、最終スタートも控除する", () => {
+  const record = historyNormalRecord([477, 38, 100, 250]);
+  const result = background.applyMasterData(record, null);
+  // 477 + 0 + 0 + 150 + (292 - 100)
+  assert.equal(result.parts.calculation.normalStarts, 819);
+  assert.equal(result.parts.calculation.estimatedUsedBalls, 5500);
+  assert.equal(result.parts.calculation.rotationRate, 37.23);
+  assert.equal(background.flattenRecord(result, true).normalStarts, 819);
+  assert.equal(record.parts.summary.normalStarts, undefined);
+  assert.equal(background.applyMasterData(result, null).parts.calculation.normalStarts, 819);
+});
+
+test("初回100未満も通常、当たりゼロは全スタート、最終100未満は0", () => {
+  assert.equal(background.normalStartsFromHistory(historyNormalRecord([50], 99)).value, 50);
+  assert.equal(background.normalStartsFromHistory(historyNormalRecord([], 292)).value, 292);
+});
+
+test("通常回転の実測を優先し、設定OFFと履歴不足は補完しない", () => {
+  const record = historyNormalRecord([477, 250]);
+  record.parts.summary.normalStarts = 0;
+  assert.equal(background.normalStartsFromHistory(record).value, 0);
+  delete record.parts.summary.normalStarts;
+  record.calculationInputs.historyNormal.enabled = false;
+  assert.equal(background.normalStartsFromHistory(record).value, null);
+  record.calculationInputs.historyNormal.enabled = true;
+  record.parts.history.rows.pop();
+  assert.equal(background.normalStartsFromHistory(record).reason, "historyIncomplete");
+});
+
+test("重複履歴・欠損スタート・最終不明・遊タイムは通常回転を推測しない", () => {
+  for (const mutate of [
+    r => { r.parts.history.rows[0].no = 1; },
+    r => { r.parts.history.rows[0].start = null; },
+    r => { r.parts.summary.finalStarts = null; },
+    r => { r.parts.history.rows.push({ isYutime: true }); }
+  ]) {
+    const record = historyNormalRecord([477, 250]);
+    mutate(record);
+    assert.equal(background.normalStartsFromHistory(record).value, null);
+  }
+});
 
 test("内訳も履歴出玉もない店で、31回×指定1400玉から払出を推定する", () => {
   const record = { machineName: "test", parts: {
